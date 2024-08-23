@@ -467,12 +467,25 @@ def main():
         )
 
     if training_args.do_train:
-        raw_datasets["train"] = load_dataset(
-            data_args.dataset_name,
-            data_args.dataset_config_name,
-            split=data_args.train_split_name,
-            num_proc=num_workers,
-        )
+
+        if data_args.dataset_name == "fma_small":
+            dataset_path = os.path.join(os.path.dirname(__file__), "data", "ft_data.py")
+            split_path = None
+
+            raw_datasets["train"] = load_dataset(
+                "/share/hel/home/manos/data/fma/fma_small",
+                # dataset_path,
+                # split_path=split_path,
+                num_proc=num_workers,
+                cache_dir=model_args.cache_dir,
+            )
+        else:
+            raw_datasets["train"] = load_dataset(
+                data_args.dataset_name,
+                data_args.dataset_config_name,
+                split=data_args.train_split_name,
+                num_proc=num_workers,
+            )
 
         if data_args.target_audio_column_name not in raw_datasets["train"].column_names:
             raise ValueError(
