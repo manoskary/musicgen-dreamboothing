@@ -46,6 +46,11 @@ from transformers.integrations import is_wandb_available
 from multiprocess import set_start_method
 
 
+os.environ["WANDB_PROJECT"] = "Generative-Music-Medicine"
+# Set WANDB Entity to your username
+os.environ["WANDB_ENTITY"] = "vocsep"
+os.environ["WANDB_RUN_GROUP"] = "Fine-Tuning"
+
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.40.0.dev0")
 require_version("datasets>=2.12.0")
