@@ -4,7 +4,7 @@
 
     "dataset_name": "/share/cp/temp/musicmed/metadata_test_32k",
     "dataset_config_name": "default",
-    "target_audio_column_name": "audio",
+    "target_audio_column_name": "AUDIO",
     "instance_prompt": "punk",
     "train_split_name": "train",
     "eval_split_name": "val",
@@ -32,7 +32,7 @@
     "use_lora": true,
 
     "logging_steps": 1,
-
+    "text_column_name": "METADATA",
     "pad_token_id": 2048,
     "decoder_start_token_id": 2048,
 
@@ -51,13 +51,13 @@
     "push_to_hub": false,
     "hub_model_id": "musicgen-melody-lora-punk",
 
-    "audio_separation": true,
+    "audio_separation": false,
     "audio_separation_batch_size": 32,
 
 
     "report_to": "wandb",
     "add_audio_samples_to_wandb": true,
-    "add_metadata": true,
+    "add_metadata": false,
     "full_generation_sample_text": "Sad ambient track with a vibraphone and a flute",
     "guidance_scale": 1.0
 }
