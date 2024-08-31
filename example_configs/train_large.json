@@ -2,12 +2,11 @@
     "overwrite_output_dir": true,
     "output_dir": "./jmd-musicgen-large",
 
-    "dataset_name": "/share/cp/temp/musicmed/metadata_test_32k",
+    "dataset_name": "/share/cp/temp/musicmed/metadata_test_32k_no_voice",
     "dataset_config_name": "default",
     "target_audio_column_name": "AUDIO",
-    "instance_prompt": "punk",
     "train_split_name": "train",
-    "eval_split_name": "val",
+    "eval_split_name": "eval",
 
     "max_duration_in_seconds": 30,
     "min_duration_in_seconds": 1.0,
@@ -49,7 +48,7 @@
     "seed": 0,
 
     "push_to_hub": false,
-    "hub_model_id": "musicgen-melody-lora-punk",
+    "hub_model_id": "musicgen-melody-lora-musicmed",
 
     "audio_separation": false,
     "audio_separation_batch_size": 32,

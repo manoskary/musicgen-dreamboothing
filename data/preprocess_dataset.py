@@ -88,7 +88,7 @@ def remove_vocals(batch, rank=None):
 
 
 base_dir = "/share/cp/temp/musicmed/metadata_test_32k/"
-arrow_files = [os.path.join(base_dir, fn) for fn in os.listdir(base_dir) if fn.endswith(".arrow")]
+arrow_files = [os.path.join(base_dir, fn) for fn in os.listdir(base_dir) if fn.endswith(".arrow") and fn.startswith("data")]
 ds = concatenate_datasets([Dataset.from_file(arrow_file) for arrow_file in arrow_files])
 
 audio_column_name = "AUDIO"
@@ -98,12 +98,13 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 # set multiprocessing start method
 torch.multiprocessing.set_start_method("spawn")
 
-ds = ds.remove_columns("has_voice")
+
 # find if track has voice
 if "has_voice" not in ds.column_names:
     has_voice = np.char.find(ds["INSTR"], "voice") > -1
     ds = ds.add_column("has_voice", has_voice)
 else:
+    ds = ds.remove_columns("has_voice")
     has_voice = ds["has_voice"]
 
 # find idx of tracks with voice
@@ -122,7 +123,7 @@ genre = np.char.replace(genre, ",", ", ")
 
 # merge instr, tags and genre into metadata with comma separated values
 metadata = np.char.add(np.char.add(instr, tags), genre)
-ds.add_column("METADATA", metadata)
+ds = ds.add_column("METADATA", metadata)
 
 # find all unique tag words
 tags = np.char.split(tags, ", ")

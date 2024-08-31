@@ -484,6 +484,13 @@ def main():
                 num_proc=num_workers,
                 cache_dir=model_args.cache_dir,
             )
+        elif os.path.isdir(data_args.dataset_name):
+            from datasets import Dataset, concatenate_datasets
+
+            base_dir = data_args.dataset_name
+            arrow_files = [os.path.join(base_dir, fn) for fn in os.listdir(base_dir) if fn.endswith(".arrow")]
+            raw_datasets["train"] = concatenate_datasets([Dataset.from_file(arrow_file) for arrow_file in arrow_files])
+
         else:
             raw_datasets["train"] = load_dataset(
                 data_args.dataset_name,
@@ -520,12 +527,7 @@ def main():
             )
 
     if training_args.do_eval:
-        raw_datasets["eval"] = load_dataset(
-            data_args.dataset_name,
-            data_args.dataset_config_name,
-            split=data_args.eval_split_name,
-            num_proc=num_workers,
-        )
+        raw_datasets["eval"] = raw_datasets["train"].select(np.arange(len(raw_datasets["train"]) // 10))
 
         if data_args.max_eval_samples is not None:
             raw_datasets["eval"] = raw_datasets["eval"].select(
