@@ -484,13 +484,14 @@ def main():
                 num_proc=num_workers,
                 cache_dir=model_args.cache_dir,
             )
+
+
         elif os.path.isdir(data_args.dataset_name):
             from datasets import Dataset, concatenate_datasets
 
             base_dir = data_args.dataset_name
-            arrow_files = [os.path.join(base_dir, fn) for fn in os.listdir(base_dir) if fn.endswith(".arrow")]
-            raw_datasets["train"] = concatenate_datasets([Dataset.from_file(arrow_file) for arrow_file in arrow_files])
-
+            arrow_files = [os.path.join(base_dir, fn) for fn in os.listdir(base_dir) if fn.endswith(".arrow") and fn.startswith("data")]
+            raw_datasets["train"] = concatenate_datasets([Dataset.from_file(arrow_file) for arrow_file in arrow_files], split="train")
         else:
             raw_datasets["train"] = load_dataset(
                 data_args.dataset_name,
@@ -572,7 +573,7 @@ def main():
                         demucs.samplerate,
                         demucs.audio_channels,
                     ).T
-                    for audio in batch["audio"]
+                    for audio in batch["AUDIO"]
                 ]
                 wavs_length = [audio.shape[0] for audio in wavs]
 
@@ -637,8 +638,8 @@ def main():
 
         def enrich_text(batch):
             audio, sampling_rate = (
-                batch["audio"]["array"],
-                batch["audio"]["sampling_rate"],
+                batch["AUDIO"]["array"],
+                batch["AUDIO"]["sampling_rate"],
             )
 
             tempo, _ = librosa.beat.beat_track(y=audio, sr=sampling_rate)
@@ -851,7 +852,7 @@ def main():
         )
 
         def is_audio_in_length_range(length):
-            return length > min_target_length and length < max_target_length
+            return length > min_target_length and length <= max_target_length
 
         # filter data that is shorter than min_target_length
         vectorized_datasets = vectorized_datasets.filter(
@@ -1024,7 +1025,7 @@ def main():
 
         def decode_predictions(processor, predictions):
             audios = predictions.predictions
-            return {"audio": np.array(audios.squeeze(1))}
+            return {"AUDIO": np.array(audios.squeeze(1))}
 
         class WandbPredictionProgressCallback(WandbCallback):
             """
@@ -1069,7 +1070,7 @@ def main():
                 texts = self.processor.tokenizer.batch_decode(
                     input_ids, skip_special_tokens=True
                 )
-                audios = [a for a in predictions["audio"]]
+                audios = [a for a in predictions["AUDIO"]]
 
                 additional_audio = self.trainer.model.generate(
                     **self.additional_generation.to(self.trainer.model.device),
@@ -1108,7 +1109,7 @@ def main():
                 texts = self.processor.tokenizer.batch_decode(
                     input_ids, skip_special_tokens=True
                 )
-                audios = [a for a in predictions["audio"]]
+                audios = [a for a in predictions["AUDIO"]]
 
                 additional_audio = self.trainer.model.generate(
                     **self.additional_generation.to(self.trainer.model.device),
