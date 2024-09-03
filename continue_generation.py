@@ -12,6 +12,7 @@ parser.add_argument("--device", type=int, default=0)
 parser.add_argument("--model_path", type=str, default="ylacombe/musicgen-melody-punk-lora")
 parser.add_argument("--output_dir", type=str, default="artifacts")
 parser.add_argument("--guidance_scale", type=int, default=3)
+parser.add_argument("--file_name", type=str, default="musicgen_out_0.wav")
 
 args = parser.parse_args()
 
@@ -22,7 +23,12 @@ device = torch.device(f"cuda:{args.device}" if torch.cuda.device_count()>0 else 
 
 model_path = args.model_path
 
-sample, sr = librosa.load(os.path.join(base_dir, "musicgen_out_0.wav"), sr=32000)
+fn = args.file_name
+
+if not os.path.exists(os.path.join(base_dir, fn)):
+    raise FileNotFoundError(f"File {fn} not found in {base_dir}")
+
+sample, sr = librosa.load(os.path.join(base_dir, fn), sr=32000)
 
 sample_1 = sample[len(sample) // 4 : ]
 sample_2 = sample[len(sample) // 2 : ]
@@ -37,7 +43,7 @@ processor = AutoProcessor.from_pretrained(model_path)
 inputs = processor(
     audio=[sample_1, sample_2],
     sampling_rate=sr,
-    text=["80s punk and pop track with bassy drums and synth happy", "punk bossa nova sad"],
+    text=["sad, ambient, soundscape, piano, strings, flute", "happy, upbeat, piano, strings, flute, soundscape"],
     padding=True,
     return_tensors="pt"
 ).to(device)
@@ -54,5 +60,5 @@ audio_values[1] = torch.cat([torch.tensor(sample[:len(sample) // 2]).half().to(d
 sampling_rate = model.config.audio_encoder.sampling_rate
 audio_values = audio_values.cpu().float().numpy()
 
-sf.write(os.path.join(base_dir, "musicgen_out_0_continue.wav"), audio_values[0].T, sampling_rate)
-sf.write(os.path.join(base_dir, "musicgen_out_1_continue.wav"), audio_values[1].T, sampling_rate)
+sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_0_continue.wav"), audio_values[0].T, sampling_rate)
+sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_1_continue.wav"), audio_values[1].T, sampling_rate)
