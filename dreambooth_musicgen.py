@@ -1097,7 +1097,7 @@ def main():
                     }
                 )
 
-            def on_train_end(self, args, state, control, **kwargs):
+            def on_epoch_end(self, args, state, control, **kwargs):
                 super().on_train_end(args, state, control, **kwargs)
 
                 set_seed(training_args.seed)
