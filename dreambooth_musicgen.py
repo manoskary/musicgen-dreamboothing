@@ -897,16 +897,30 @@ def main():
         return batch
 
     with training_args.main_process_first(desc="audio target preprocessing"):
-        # Encodec doesn't truely support batching
-        # Pass samples one by one to the GPU
-        vectorized_datasets = vectorized_datasets.map(
-            apply_audio_decoder,
-            with_rank=True,
-            num_proc=torch.cuda.device_count()
-            if torch.cuda.device_count() > 0
-            else num_workers,
-            desc="Apply encodec",
-        )
+        if data_args.overwrite_cache or not os.path.exists(data_args.dataset_name + "_vectorized"):
+            # Encodec doesn't truely support batching
+            # Pass samples one by one to the GPU
+            vectorized_datasets = vectorized_datasets.map(
+                apply_audio_decoder,
+                with_rank=True,
+                num_proc=torch.cuda.device_count()
+                if torch.cuda.device_count() > 0
+                else num_workers,
+                desc="Apply encodec",
+            )
+            # check if dataset is a directory
+            if os.path.isdir(data_args.dataset_name):
+                # create folder if it doesn't exist
+                os.makedirs(data_args.dataset_name + "_vectorized", exist_ok=True)
+                # save the vectorized dataset to disk
+                vectorized_datasets.save_to_disk(data_args.dataset_name + "_vectorized", max_shard_size="2GB")
+        else:
+            from datasets import Dataset, concatenate_datasets
+
+            base_dir = data_args.dataset_name + "_vectorized"
+            arrow_files = [os.path.join(base_dir, fn) for fn in os.listdir(base_dir) if
+                           fn.endswith(".arrow") and fn.startswith("data")]
+            vectorized_datasets = concatenate_datasets([Dataset.from_file(arrow_file) for arrow_file in arrow_files])
 
     if data_args.add_audio_samples_to_wandb and "wandb" in training_args.report_to:
         if is_wandb_available():

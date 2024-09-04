@@ -5,6 +5,7 @@ import soundfile as sf
 import os
 import librosa
 import argparse
+import numpy as np
 
 parser = argparse.ArgumentParser()
 
@@ -19,7 +20,7 @@ args = parser.parse_args()
 base_dir = os.path.join(os.path.dirname(__file__), args.output_dir)
 os.makedirs(base_dir, exist_ok=True)
 
-device = torch.device(f"cuda:{args.device}" if torch.cuda.device_count()>0 else "cpu")
+device = torch.device(f"cuda:{args.device}" if torch.cuda.device_count() > 0 and args.device >= 0 else "cpu")
 
 model_path = args.model_path
 
@@ -31,7 +32,7 @@ if not os.path.exists(os.path.join(base_dir, fn)):
 sample, sr = librosa.load(os.path.join(base_dir, fn), sr=32000)
 
 sample_1 = sample[len(sample) // 4 : ]
-sample_2 = sample[len(sample) // 2 : ]
+sample_2 = sample[len(sample) // 4 : ]
 
 config = PeftConfig.from_pretrained(model_path)
 model = AutoModelForTextToWaveform.from_pretrained(config.base_model_name_or_path, torch_dtype=torch.float16)
@@ -50,15 +51,15 @@ inputs = processor(
 
 inputs["input_values"] = inputs["input_values"].half()
 
-audio_values = model.generate(**inputs, do_sample=True, guidance_scale=3, max_new_tokens=1024)
+audio_values = model.generate(**inputs, do_sample=True, guidance_scale=1, max_new_tokens=750)
 audio_values = processor.batch_decode(audio_values, padding_mask=inputs.padding_mask)
 
 # add the new audio to the original samples
-audio_values[0] = torch.cat([torch.tensor(sample[:len(sample) // 4]).half().to(device), audio_values[0]], dim=0)
-audio_values[1] = torch.cat([torch.tensor(sample[:len(sample) // 2]).half().to(device), audio_values[1]], dim=0)
+audio_file_01 = audio_file_01 = np.hstack((sample[:len(sample) // 4], audio_values[0].squeeze()))
+audio_file_02 = np.hstack((sample[:len(sample) // 2], audio_values[1].squeeze()))
 
 sampling_rate = model.config.audio_encoder.sampling_rate
 audio_values = audio_values.cpu().float().numpy()
 
-sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_0_continue.wav"), audio_values[0].T, sampling_rate)
-sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_1_continue.wav"), audio_values[1].T, sampling_rate)
+sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_0_continue.wav"), audio_file_01.T, sampling_rate)
+sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_1_continue.wav"), audio_file_02.T, sampling_rate)
