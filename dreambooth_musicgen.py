@@ -918,9 +918,15 @@ def main():
             from datasets import Dataset, concatenate_datasets
 
             base_dir = data_args.dataset_name + "_vectorized"
-            arrow_files = [os.path.join(base_dir, fn) for fn in os.listdir(base_dir) if
+            vectorized_datasets = DatasetDict()
+            arrow_files = [os.path.join(base_dir, "train", fn) for fn in os.listdir(os.path.join(base_dir, "train")) if
                            fn.endswith(".arrow") and fn.startswith("data")]
-            vectorized_datasets = concatenate_datasets([Dataset.from_file(arrow_file) for arrow_file in arrow_files])
+            vectorized_datasets["train"] = concatenate_datasets(
+                [Dataset.from_file(arrow_file) for arrow_file in arrow_files])
+            arrow_files = [os.path.join(base_dir, "eval", fn) for fn in os.listdir(os.path.join(base_dir, "eval")) if
+                           fn.endswith(".arrow") and fn.startswith("data")]
+            vectorized_datasets["eval"] = concatenate_datasets(
+                [Dataset.from_file(arrow_file) for arrow_file in arrow_files])
 
     if data_args.add_audio_samples_to_wandb and "wandb" in training_args.report_to:
         if is_wandb_available():
