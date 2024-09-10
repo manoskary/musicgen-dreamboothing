@@ -21,7 +21,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union
-
+from emotion_clf.MER import MER
 import datasets
 import numpy as np
 import torch
@@ -45,6 +45,8 @@ from transformers.utils.versions import require_version
 from transformers.integrations import is_wandb_available
 from multiprocess import set_start_method
 
+from emotion_clf.ml.inference_utils import TAG_MAP
+from torchmetrics import Accuracy
 
 os.environ["WANDB_PROJECT"] = "Generative-Music-Medicine"
 # Set WANDB Entity to your username
@@ -960,7 +962,28 @@ def main():
 
         return cosine_sim.mean()
 
-    eval_metrics = {"clap": clap_similarity}
+    # get MER model
+    mer_model = MER("/share/cp/temp/musicmed/mer_model_checkpoint/experiments/convs-m128*")
+    val_mer_acc = torchmetrics.Accuracy(task="multiclass", num_classes=len(TAG_MAP), top_k=3)
+
+    # mood_tags
+    inv_tag_map = {v: k for k, v in TAG_MAP.items()}
+
+    def mer_eval(texts, audios):
+        texts = [t.lower() for t in texts]
+        mood_tags = []
+        for t in texts:
+            mood_tags.append([inv_tag_map[tag] for tag in t.split() if tag in inv_tag_map.keys()])
+        # Create tensor of mood tags
+        labels = torch.zeros(len(TAG_MAP), dtype=torch.long).to(audios.device)
+        labels[mood_tags] = 1
+        # keep only words that are in mood_tags
+        # get prediction from MER model
+        predicted_tags, logits = mer_model.predict(audios, return_logits=True)
+        result = val_mer_acc(logits, labels)
+        return result
+
+    eval_metrics = {"clap": clap_similarity, "mer_acc": mer_eval}
 
     def compute_metrics(pred):
         input_ids = pred.inputs
