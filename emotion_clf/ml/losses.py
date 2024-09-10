@@ -1,6 +1,6 @@
 """Losses"""
 from typing import Optional
-
+import os
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -24,7 +24,8 @@ class WeightedBCEWithLogitsLoss(BCEWithLogitsLoss):
                  probas_path: Optional[str] = "probas_train.npy",
                  reduction: str = "mean") -> None:
 
-        probas_path = "probas_train.npy"
+        probas_path = os.path.dirname(os.path.dirname(__file__)) + "/" + probas_path
+        probas_path = "/share/hel/home/manos/codes/musicgen-dreamboothing/emotion_clf/probas_train.npy"
         pos_weight, weight = _calc_weights(probas_path)
         super().__init__(pos_weight=pos_weight,
                          reduction=reduction,

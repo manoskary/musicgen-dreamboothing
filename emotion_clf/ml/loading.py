@@ -10,10 +10,10 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.swa_utils import AveragedModel
 
-import ml.losses
-import ml.metrics
-import ml.parameters
-from ml.experiment import Experiment
+import emotion_clf.ml.losses as ml_losses
+import emotion_clf.ml.metrics as ml_metrics
+import emotion_clf.ml.parameters as ml_parameters
+from emotion_clf.ml.experiment import Experiment
 import pdb
 
 
@@ -39,7 +39,7 @@ def load_experiment(experiment_dir: str,
     Final parameters are written in experiment_dir/parameters.json.
     Additional arguments are given to the Experiment class constructor."""
 
-    parameters = ml.parameters.load_parameters_recursively(experiment_dir)
+    parameters = ml_parameters.load_parameters_recursively(experiment_dir)
     if not os.path.exists(experiment_dir):
         os.makedirs(experiment_dir, exist_ok=True)
     #os.makedirs(experiment_dir, exist_ok=True)
@@ -98,7 +98,7 @@ def load_experiment(experiment_dir: str,
 
 def load_model(model_params: Dict[str, Any], device: str) -> Module:
     """Load model from models.name module"""
-    model_module = importlib.import_module(f"models.{model_params['name']}")
+    model_module = importlib.import_module(f"emotion_clf.models.{model_params['name']}")
     get_model = getattr(model_module, "get_model")
     model = get_model(model_params["params"]).to(device)
     return model
@@ -127,7 +127,7 @@ def load_dataloaders(root, splits, dataset_params, dataloaders_params, num_worke
     """Load dict of dataloaders
 
     Uses function get_dataloader in module loaders.dataset_name"""
-    loader_module = importlib.import_module(f"loaders.{dataset_params['name']}")  # loaders.jamendo 
+    loader_module = importlib.import_module(f"emotion_clf.loaders.{dataset_params['name']}")  # loaders.jamendo
     data_dir = os.path.join(root, dataset_params["name"])  # data/jamendo
     get_dataloader = getattr(loader_module, "get_dataloader")
     params_all = dataset_params["params"].get("all") # directory: melspecs2
@@ -143,7 +143,7 @@ def load_dataloaders(root, splits, dataset_params, dataloaders_params, num_worke
 
 def load_loss(loss_params: Dict[str, Any], device: str) -> _Loss:
     """Load loss from module ml.losses"""
-    loss_class = getattr(ml.losses, loss_params["name"])
+    loss_class = getattr(ml_losses, loss_params["name"])
     loss_params = loss_params["params"]
     return loss_class(**loss_params).to(device)
 
@@ -153,7 +153,7 @@ def load_metrics(metrics_names: List[str]):
     metrics = {}
     if metrics_names is not None:
         for met in metrics_names:
-            metrics[met] = getattr(ml.metrics, met)
+            metrics[met] = getattr(ml_metrics, met)
     return metrics
 
 
@@ -161,7 +161,7 @@ def load_eval_activation(name: str):
     """Load evaluation activation from module ml.metrics"""
     activation = None
     if name is not None:
-        activation = getattr(ml.metrics, name)
+        activation = getattr(ml_metrics, name)
     return activation
 
 
@@ -170,7 +170,7 @@ def load_preprocessor(preproc_params: Dict[str, Any], device: str) -> Module:
     preproc = None
     if preproc_params is not None:
         preproc_module = importlib.import_module(
-            f"preprocessors.{preproc_params['name']}")
+            f"emotion_clf.preprocessors.{preproc_params['name']}")
         get_preprocessor = getattr(preproc_module, "get_preprocessor")
         preproc = get_preprocessor(preproc_params["params"]).to(device)
     return preproc

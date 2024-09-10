@@ -5,8 +5,8 @@ import torch
 from torch import Tensor
 from tqdm import tqdm
 
-import ml.utils
-from ml.experiment import Experiment
+import emotion_clf.ml.utils as mlutils
+from emotion_clf.ml.experiment import Experiment
 import pdb
 
 def train_one_epoch(exp: Experiment, split: str):
@@ -14,7 +14,7 @@ def train_one_epoch(exp: Experiment, split: str):
 
     exp.model.train()
 
-    loss_avg = ml.utils.RunningAverage()
+    loss_avg = mlutils.RunningAverage()
 
     outs = []
     targs = []

@@ -8,7 +8,7 @@ import torch
 import torchaudio
 import librosa
 
-import ml
+import emotion_clf.ml as ml
 import pdb
 
 TAG_MAP= {"0": "action", "1": "adventure", "2": "advertising", "3": "background", "4": "ballad", "5": "calm",

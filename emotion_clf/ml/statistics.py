@@ -6,8 +6,8 @@ from typing import Dict
 import torch
 from tqdm import tqdm
 
-import ml.utils
-from ml.experiment import Experiment
+import emotion_clf.ml.utils
+from emotion_clf.ml.experiment import Experiment
 
 
 def calculate_stats(exp: Experiment) -> Dict[str, float]:

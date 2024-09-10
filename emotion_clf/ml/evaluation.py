@@ -5,8 +5,8 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
-import ml.utils
-from ml.experiment import Experiment
+import emotion_clf.ml.utils as ml_utils
+from emotion_clf.ml.experiment import Experiment
 import pdb
 
 def evaluate(
@@ -39,7 +39,7 @@ def evaluate(
     model.eval()
 
     if split != "inference":
-        loss_avg = ml.utils.RunningAverage()
+        loss_avg = ml_utils.RunningAverage()
 
         outs = []
         targs = []

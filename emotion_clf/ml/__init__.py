@@ -1,4 +1,4 @@
 "Import all submodules"
 
-from ml import (parameters, evaluation, experiment, loading, logging, losses,
+from emotion_clf.ml import (parameters, evaluation, experiment, loading, logging, losses,
                 metrics, predictions, statistics, training, utils, inference_utils)

@@ -10,9 +10,9 @@ import torch
 import torchaudio
 import librosa
 
-import ml
+import emotion_clf.ml as ml
 import pdb
-from ml.inference_utils import *
+from emotion_clf.ml.inference_utils import *
 
 class Experiment():
     """An Experiment contains everything to train and evaluate a model

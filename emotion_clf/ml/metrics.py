@@ -5,8 +5,7 @@ import numpy as np
 import sklearn.metrics
 import torch
 from torch import Tensor
-
-import ml.losses
+import emotion_clf.ml.losses as ml_losses
 
 
 def extract_first_metric(metrics: Dict[str, np.ndarray]) -> float:
@@ -42,14 +41,14 @@ def bce_loss(targets: np.ndarray, probas: np.ndarray) -> np.ndarray:
 
 
 def focal_loss(targets: np.ndarray, probas: np.ndarray) -> np.ndarray:
-    loss = ml.losses.BinaryFocalLossWithLogits(reduction='none')
+    loss = ml_losses.BinaryFocalLossWithLogits(reduction='none')
     targs = torch.Tensor(targets)
     outs = torch.logit(torch.Tensor(probas))
     return torch.mean(loss(outs, targs), 0).cpu().numpy()
 
 
 def weighted_bce_loss(targets: np.ndarray, probas: np.ndarray) -> np.ndarray:
-    loss = ml.losses.WeightedBCEWithLogitsLoss(reduction="none")
+    loss = ml_losses.WeightedBCEWithLogitsLoss(reduction="none")
     targs = torch.Tensor(targets)
     outs = torch.logit(torch.Tensor(probas))
     return torch.mean(loss(outs, targs), 0).cpu().numpy()

@@ -1,12 +1,8 @@
-import os
-import argparse
-
-import ml
-import numpy as np
-from ml.inference_utils import *
+import emotion_clf.ml as ml
+from emotion_clf.ml.inference_utils import *
 import glob
 import tqdm
-import pdb
+
 
 class MER():
     def __init__(self,
@@ -18,7 +14,7 @@ class MER():
         else:  # if is ensemble
             self.experiment_dir = glob.glob(pretrain_dir)
     
-    def predict(self, generated):
+    def predict(self, generated, return_logits=False):
         probs = []
         print("Loading MER...")
         for path in tqdm.tqdm(self.experiment_dir):  # all models
@@ -35,14 +31,16 @@ class MER():
 
             # Collecting all outputs from each model
             probs.append(out_probs.numpy())
-        probs = np.array(probs)
-        top_3_indices = np.argsort(probs.mean(axis=0))[-3:]  # ascending
-        binarized = np.zeros_like(probs.mean(axis=0))
+        logits = np.array(probs)
+        top_3_indices = np.argsort(logits.mean(axis=0))[-3:]  # ascending
+        binarized = np.zeros_like(logits.mean(axis=0))
         binarized[top_3_indices] = 1
         out_tags = []
         for i in np.flip(top_3_indices):
             out_tags.append(TAG_MAP[str(i)])
-        return out_tags  # descending
+        if return_logits:
+            return out_tags, logits
+        return out_tags
 
 
 def main():

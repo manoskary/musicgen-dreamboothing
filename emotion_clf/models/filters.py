@@ -6,7 +6,7 @@ from torch import Tensor
 from torch.nn import Module
 import pdb
 
-from models.modules import FC, Collapse, Conv, Output, Filter
+from emotion_clf.models.modules import FC, Collapse, Conv, Output, Filter
 
 
 def get_model(model_params: Dict[str, Any]) -> Module:
