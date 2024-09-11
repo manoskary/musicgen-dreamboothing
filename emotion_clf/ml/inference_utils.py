@@ -30,7 +30,7 @@ def inference_process(file):
     else:  ## if is waveform
         data = file
         
-    data = data.detach().mean(0)  # to mono
+    # data = data.detach().mean(0)  # to mono
     #data = torchaudio.transforms.Resample(sr, 44100, dtype=data.dtype)(data)
     data, _ = librosa.effects.trim(data)
     data = data.to("cuda")

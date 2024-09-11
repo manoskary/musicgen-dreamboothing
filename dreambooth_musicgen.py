@@ -989,8 +989,7 @@ def main():
         audios = torch.tensor(audios).squeeze().to("cuda") # (batch_size, 1, n_samples)
         preds = torch.zeros((len(texts), len(TAG_MAP)), dtype=torch.float32)
         for i in range(len(texts)):
-            data = preprocessor(audios[i])
-            predicted_tags, logits = mer_model.predict(data.unsqueeze(0), return_logits=True)
+            predicted_tags, logits = mer_model.predict(audios[0], return_logits=True)
             preds[i] = logits.mean(0)
 
         mean_acc = multiclass_auprc(logits, labels, average="macro", num_classes=len(TAG_MAP))
