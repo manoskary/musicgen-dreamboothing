@@ -46,7 +46,8 @@ from transformers.integrations import is_wandb_available
 from multiprocess import set_start_method
 
 from emotion_clf.ml.inference_utils import TAG_MAP
-from torchmetrics import Accuracy
+from torcheval.metrics.functional import multilabel_accuracy, multiclass_auprc
+
 
 os.environ["WANDB_PROJECT"] = "Generative-Music-Medicine"
 # Set WANDB Entity to your username
@@ -964,24 +965,36 @@ def main():
 
     # get MER model
     mer_model = MER("/share/cp/temp/musicmed/mer_model_checkpoint/experiments/convs-m128*")
-    val_mer_acc = torchmetrics.Accuracy(task="multiclass", num_classes=len(TAG_MAP), top_k=3)
 
     # mood_tags
-    inv_tag_map = {v: k for k, v in TAG_MAP.items()}
+    inv_tag_map = {v: int(k) for k, v in TAG_MAP.items()}
+    from emotion_clf.ml.loading import load_preprocessor
+    preprocessor = load_preprocessor({"name": "melspectrogram",
+                                      "params": {
+                                          "sample_rate": 32000,
+                                          "n_fft": 2048,
+                                          "f_min": 0.0,
+                                          "f_max": 16000,
+                                          "n_mels": 128
+                                      }}, "cuda")
 
     def mer_eval(texts, audios):
         texts = [t.lower() for t in texts]
-        mood_tags = []
-        for t in texts:
-            mood_tags.append([inv_tag_map[tag] for tag in t.split() if tag in inv_tag_map.keys()])
-        # Create tensor of mood tags
-        labels = torch.zeros(len(TAG_MAP), dtype=torch.long).to(audios.device)
-        labels[mood_tags] = 1
+        labels = torch.zeros((len(texts), len(TAG_MAP)), dtype=torch.long)
+        for i, t in enumerate(texts):
+            gt_tags = [inv_tag_map[tag.replace(" ", "")] for tag in t.split(",") if tag.replace(" ", "") in inv_tag_map.keys()]
+            labels[i, gt_tags] = 1
         # keep only words that are in mood_tags
         # get prediction from MER model
-        predicted_tags, logits = mer_model.predict(audios, return_logits=True)
-        result = val_mer_acc(logits, labels)
-        return result
+        audios = torch.tensor(audios).squeeze().to("cuda") # (batch_size, 1, n_samples)
+        preds = torch.zeros((len(texts), len(TAG_MAP)), dtype=torch.float32)
+        for i in range(len(texts)):
+            data = preprocessor(audios[i])
+            predicted_tags, logits = mer_model.predict(data.unsqueeze(0), return_logits=True)
+            preds[i] = logits.mean(0)
+
+        mean_acc = multiclass_auprc(logits, labels, average="macro", num_classes=len(TAG_MAP))
+        return mean_acc
 
     eval_metrics = {"clap": clap_similarity, "mer_acc": mer_eval}
 

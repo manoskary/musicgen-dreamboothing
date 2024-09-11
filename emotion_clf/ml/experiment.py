@@ -49,6 +49,7 @@ class Experiment():
                 wave = inference_process(data_dir)
                 self.dls = [(wave, None)]
         else:  # if already loaded
+            wave = data_dir
             self.dls = [(wave, None)]
 
         self.loss = ml.loading.load_loss(self.params.get("loss"), device=self.device)  # weighted BCE w/ Logit Loss
