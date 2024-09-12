@@ -46,7 +46,7 @@ from transformers.integrations import is_wandb_available
 from multiprocess import set_start_method
 
 from emotion_clf.ml.inference_utils import TAG_MAP
-from torcheval.metrics.functional import multilabel_accuracy, multiclass_auprc
+from torcheval.metrics.functional import multilabel_accuracy, multilabel_auprc
 
 
 os.environ["WANDB_PROJECT"] = "Generative-Music-Medicine"
@@ -990,12 +990,15 @@ def main():
         preds = torch.zeros((len(texts), len(TAG_MAP)), dtype=torch.float32)
         for i in range(len(texts)):
             predicted_tags, logits = mer_model.predict(audios[0], return_logits=True)
-            preds[i] = logits.mean(0)
+            preds[i] = torch.tensor(logits.mean(0))
 
-        mean_acc = multiclass_auprc(logits, labels, average="macro", num_classes=len(TAG_MAP))
-        return mean_acc
+        exact_acc = multilabel_accuracy(preds, labels, criteria='exact_match')
+        ham_acc = multilabel_accuracy(preds, labels, criteria='hamming')
+        auprc = multilabel_auprc(preds, labels, average="macro", num_labels=len(TAG_MAP))
+        result = {"mer_exact_acc": exact_acc, "mer_ham_acc": ham_acc, "mer_auprc": auprc}
+        return result
 
-    eval_metrics = {"clap": clap_similarity, "mer_acc": mer_eval}
+    eval_metrics = {"clap": clap_similarity}
 
     def compute_metrics(pred):
         input_ids = pred.inputs
@@ -1004,6 +1007,9 @@ def main():
         audios = pred.predictions
 
         results = {key: metric(texts, audios) for (key, metric) in eval_metrics.items()}
+
+        for k, v in mer_eval(texts, audios).items():
+            results[k] = v
 
         return results
 

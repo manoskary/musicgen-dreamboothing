@@ -39,14 +39,17 @@ class Experiment():
         if splits is None:
             splits = self.params.get("dataloaders").keys()
 
-        if not os.path.isfile(data_dir):  # usually directory, only is file when inference
+        if isinstance(data_dir, torch.Tensor):
+            # used when inferencing, avoid loading presaved pickle etc, to mimic the output of load_dataloaders
+            wave = inference_process(data_dir)
+            self.dls = [(wave, None)]
+        elif not os.path.isfile(data_dir):  # usually directory, only is file when inference
             # self.dls = (data_batch, target_batch) --> data_batch=(1, 128, length)
             self.dls = ml.loading.load_dataloaders(data_dir, splits,
                                                 self.params.get("dataset"),
                                                 self.params.get("dataloaders"),
                                                 num_workers)
-        else:  
-            # used when inferencing, avoid loading presaved pickle etc, to mimic the output of load_dataloaders
+        else:
             wave = inference_process(data_dir)
             self.dls = [(wave, None)]
 

@@ -28,7 +28,7 @@ def inference_process(file):
         data, sr = torchaudio.load(file)
         data = data.detach().mean(0)  # to mono, shape=torch.Size([length])
     else:  ## if is waveform
-        data = file
+        data = file if file.device == torch.device("cpu") else file.detach().to("cpu")
         
     # data = data.detach().mean(0)  # to mono
     #data = torchaudio.transforms.Resample(sr, 44100, dtype=data.dtype)(data)
