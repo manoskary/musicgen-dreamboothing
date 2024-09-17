@@ -6,6 +6,7 @@ import os
 import librosa
 import argparse
 import numpy as np
+import pandas as pd
 
 parser = argparse.ArgumentParser()
 
@@ -14,8 +15,63 @@ parser.add_argument("--model_path", type=str, default="ylacombe/musicgen-melody-
 parser.add_argument("--output_dir", type=str, default="artifacts")
 parser.add_argument("--guidance_scale", type=int, default=3)
 parser.add_argument("--file_name", type=str, default="musicgen_out_0.wav")
+parser.add_argument("--current_state", type=str, default="sad")
+parser.add_argumnet("--target_state", type=str, default="happy")
 
 args = parser.parse_args()
+
+
+def globals_and_setup(init_state, final_state):
+    emotions = np.array([
+        "bored", "depressed", "sad", "upset", "stressed",
+        "nervous", "tense", "alert", "excited", "elated",
+        "happy", "contented", "serene", "relaxed", "calm"])
+    assert init_state in emotions
+    assert final_state in emotions
+    init_index = emotions.index(init_state)
+    final_index = emotions.index(final_state)
+    assert init_index < final_index
+    return emotions[init_index, final_index]
+
+
+def compute_num_steps(total_time, num_states, overlap=0.25, step_time=30):
+    """
+    Compute the average number of steps required for every state.
+
+    Parameters
+    ----------
+    total_time: int
+        The total time in minutes of the generation
+    num_states: int
+        The number of different emotion states
+    overlap: float
+        The amount of content from the generation excerpt of the previous step used for conditioning
+    step_time: int
+        The generation time in seconds for every generation step.
+
+    Returns
+    -------
+    float
+        The average number of steps required for each state.
+    """
+    # Convert total time from minutes to seconds
+    total_time_seconds = total_time * 60
+
+    # Calculate net new content generated per step (accounting for overlap)
+    net_content_per_step = step_time * (1 - overlap)
+
+    # Total net content needed per state
+    # Total time is equally divided among states, with any leftover time added to the final state
+    base_state_time = total_time_seconds // num_states
+    leftover_time = total_time_seconds % num_states
+    state_times = [base_state_time] * num_states
+    state_times[-1] += leftover_time  # Add any leftover time to the final state
+
+    # Calculate the number of steps for each state
+    steps_per_state = np.array([state_time / net_content_per_step for state_time in state_times])
+
+    return steps_per_state
+
 
 base_dir = os.path.join(os.path.dirname(__file__), args.output_dir)
 os.makedirs(base_dir, exist_ok=True)
