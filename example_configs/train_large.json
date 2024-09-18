@@ -43,7 +43,7 @@
     "eval_steps": 25,
     "evaluation_strategy": "steps",
     "per_device_eval_batch_size": 4,
-    "max_eval_samples": 8,
+    "max_eval_samples": 32,
     "generation_max_length": 1503,
 
     "seed": 0,

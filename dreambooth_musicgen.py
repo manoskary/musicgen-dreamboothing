@@ -44,10 +44,10 @@ from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 from transformers.integrations import is_wandb_available
 from multiprocess import set_start_method
-
+import pandas as pd
 from emotion_clf.ml.inference_utils import TAG_MAP
 from torcheval.metrics.functional import multilabel_accuracy, multilabel_auprc
-
+from torcheval.metrics.audio import FrechetAudioDistance
 
 os.environ["WANDB_PROJECT"] = "Generative-Music-Medicine"
 # Set WANDB Entity to your username
@@ -61,6 +61,9 @@ require_version("datasets>=2.12.0")
 
 logger = logging.getLogger(__name__)
 
+df = pd.read_csv(os.path.join(os.path.dirname(__file__), "average_mood.csv"))
+
+EMOTION_MAP = dict(zip(df["emotion"].unique(), np.arange(14)))
 
 def list_field(default=None, metadata=None):
     return field(default_factory=lambda: default, metadata=metadata)
@@ -968,6 +971,10 @@ def main():
 
     # mood_tags
     inv_tag_map = {v: int(k) for k, v in TAG_MAP.items()}
+    MOOD_TO_EMOTION_LABEL = torch.tensor(
+        [[inv_tag_map[m], EMOTION_MAP[e]] for i, (m, e) in df.iterrows() if m in inv_tag_map.keys()]).long()
+    # mood_multipliers = torch.zeros((14,)).scatter_(0, MOOD_TO_EMOTION_LABEL[:, 1], 1, reduce="sum")
+
     from emotion_clf.ml.loading import load_preprocessor
     preprocessor = load_preprocessor({"name": "melspectrogram",
                                       "params": {
@@ -992,10 +999,30 @@ def main():
             predicted_tags, logits = mer_model.predict(audios[0], return_logits=True)
             preds[i] = torch.tensor(logits.mean(0))
 
-        exact_acc = multilabel_accuracy(preds, labels, criteria='exact_match')
-        ham_acc = multilabel_accuracy(preds, labels, criteria='hamming')
         auprc = multilabel_auprc(preds, labels, average="macro", num_labels=len(TAG_MAP))
-        result = {"mer_exact_acc": exact_acc, "mer_ham_acc": ham_acc, "mer_auprc": auprc}
+
+        probs = preds.sigmoid()
+
+        exact_acc = multilabel_accuracy(probs, labels, criteria='exact_match', threshold=0.5)
+        ham_acc = multilabel_accuracy(probs, labels, criteria='hamming')
+        overlap_acc = multilabel_accuracy(probs, labels, criteria='overlap')
+        contain_acc = multilabel_accuracy(probs, labels, criteria='contain')
+
+        result = {"mer_exact_acc": exact_acc, "mer_ham_acc": ham_acc, "mer_auprc": auprc, "mer_overlap_acc": overlap_acc, "mer_contain_acc": contain_acc}
+
+        # Hierarchical_maps to 14 emotions
+        emotions_probs = torch.zeros(probs.shape[0], 14).scatter_reduce(1, MOOD_TO_EMOTION_LABEL[:, 1].repeat(probs.shape[0], 1), probs, reduce="mean")
+        # take the mean (divide by multiplicity)
+        # emotions_probs = torch.div(emotions_probs, mood_multipliers)
+        # calculate labels
+        emotions_labels = torch.zeros(probs.shape[0], 14, dtype=torch.long).scatter_reduce(1, MOOD_TO_EMOTION_LABEL[:, 1].repeat(probs.shape[0], 1), labels, reduce="sum")
+        # clip to 1
+        emotions_labels = (emotions_labels >= 1).long()
+        emotion_auprc = multilabel_auprc(emotions_probs, emotions_labels, average="macro", num_labels=14)
+        emotion_contain = multilabel_accuracy(emotions_probs, emotions_labels, criteria='contain')
+
+        result["mer_emotion_acc"] = emotion_auprc
+        result["mer_emotion_auprc"] = emotion_contain
         return result
 
     eval_metrics = {"clap": clap_similarity}
