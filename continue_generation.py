@@ -1,4 +1,5 @@
 from peft import PeftConfig, PeftModel
+from sympy.physics.mechanics.tests.test_system import states
 from transformers import AutoModelForTextToWaveform, AutoProcessor
 import torch
 import soundfile as sf
@@ -7,18 +8,24 @@ import librosa
 import argparse
 import numpy as np
 import pandas as pd
+import maad
 
-parser = argparse.ArgumentParser()
 
-parser.add_argument("--device", type=int, default=0)
-parser.add_argument("--model_path", type=str, default="ylacombe/musicgen-melody-punk-lora")
-parser.add_argument("--output_dir", type=str, default="artifacts")
-parser.add_argument("--guidance_scale", type=int, default=3)
-parser.add_argument("--file_name", type=str, default="musicgen_out_0.wav")
-parser.add_argument("--current_state", type=str, default="sad")
-parser.add_argumnet("--target_state", type=str, default="happy")
+def parse_args():
+    parser = argparse.ArgumentParser()
 
-args = parser.parse_args()
+    parser.add_argument("--device", type=int, default=0)
+    parser.add_argument("--model_path", type=str, default="ylacombe/musicgen-melody-punk-lora")
+    parser.add_argument("--output_dir", type=str, default="artifacts")
+    parser.add_argument("--guidance_scale", type=int, default=3)
+    parser.add_argument("--file_name", type=str, default="musicgen_out_0.wav")
+    parser.add_argument("--current_state", type=str, default="sad")
+    parser.add_argument("--overlap", type=float, default=0.25)
+    parser.add_argumnet("--target_state", type=str, default="happy")
+
+
+    args = parser.parse_args()
+    return args
 
 
 def globals_and_setup(init_state, final_state):
@@ -73,65 +80,79 @@ def compute_num_steps(total_time, num_states, overlap=0.25, step_time=30):
     return steps_per_state
 
 
-base_dir = os.path.join(os.path.dirname(__file__), args.output_dir)
-os.makedirs(base_dir, exist_ok=True)
+def compute_next_prompt(previous_prompt, state):
+    prompt = ""
 
-device = torch.device(f"cuda:{args.device}" if torch.cuda.device_count() > 0 and args.device >= 0 else "cpu")
-
-model_path = args.model_path
-
-fn = args.file_name
-
-if not os.path.exists(os.path.join(base_dir, fn)):
-    raise FileNotFoundError(f"File {fn} not found in {base_dir}")
-
-sample, sr = librosa.load(os.path.join(base_dir, fn), sr=32000)
-
-# normalize the audio sample to [-1, 1]
-sample = sample / np.max(np.abs(sample))
+    return prompt
 
 
-# Input prompt:
-input_prompt = "sad ambient soundscape piano strings flute"
 
-# Output prompt:
-output_prompt = "happy upbeat piano strings flute soundscape"
 
-# TODO: ~7 seconds of the source or previoussly generated audio is used as prompt, we can use this 7sec overlap to
-#  crossfade the generated audio to avoid clicks, phase shifts and volume changes after normalization.
-audios = [(sample[- len(sample) // 4 : ], sample[- len(sample) // 4 : ])]
-for i in range(10):
-    sample_1 = sample[- len(sample) // 4 : ]
-    sample_2 = sample[- len(sample) // 4 : ]
+def main():
+    args = parse_args()
+    base_dir = os.path.join(os.path.dirname(__file__), args.output_dir)
+    os.makedirs(base_dir, exist_ok=True)
+
+    device = torch.device(f"cuda:{args.device}" if torch.cuda.device_count() > 0 and args.device >= 0 else "cpu")
+
+    model_path = args.model_path
 
     config = PeftConfig.from_pretrained(model_path)
     model = AutoModelForTextToWaveform.from_pretrained(config.base_model_name_or_path, torch_dtype=torch.float16)
     model = PeftModel.from_pretrained(model, model_path).to(device)
 
     processor = AutoProcessor.from_pretrained(model_path)
-
-
+    sampling_rate = 32000
     inputs = processor(
-        audio=[sample_1, sample_2],
-        sampling_rate=sr,
-        text=["sad, ambient, soundscape, piano, strings, flute", "happy, upbeat, piano, strings, flute, soundscape"],
+        sampling_rate=sampling_rate,
+        text=args.input_prompt,
         padding=True,
         return_tensors="pt"
     ).to(device)
 
     inputs["input_values"] = inputs["input_values"].half()
 
-    audio_values = model.generate(**inputs, do_sample=True, guidance_scale=3, max_new_tokens=1100)
-    audio_values = processor.batch_decode(audio_values, padding_mask=inputs.padding_mask)
-    sample = audio_values[0]
+    audio_values = model.generate(**inputs, do_sample=True, guidance_scale=3, max_new_tokens=1503)
+    generation_length = 30 # seconds
+    max_new_tokens = int(1503 * (1 - args.overlap))
+    sample = audio_values / np.max(np.abs(audio_values))
+    index_stop = int(1 / args.overlap)
 
-    audios.append((audio_values[0][-len(audio_values[0]) // 4:], audio_values[1][-len(audio_values[1]) // 4:]))
+    states = globals_and_setup(args.current_state, args.target_state)
 
-# add the new audio to the original samples
-audio_file_01 = np.hstack((sample[: -len(sample) // 4], audio_values[0].squeeze()))
-audio_file_02 = np.hstack((sample[: -len(sample) // 4], audio_values[1].squeeze()))
+    # TODO: ~7 seconds of the source or previoussly generated audio is used as prompt, we can use this 7sec overlap to
+    #  crossfade the generated audio to avoid clicks, phase shifts and volume changes after normalization.
+    audios = [sample]
+    text_prompt = args.input_prompt
 
-sampling_rate = model.config.audio_encoder.sampling_rate
+    for i in range(10):
+        sample_next = sample[- len(sample) // index_stop : ]
+        text_prompt = compute_next_prompt(text_prompt)
+        inputs = processor(
+            audio=sample_next,
+            sampling_rate=sampling_rate,
+            text=,
+            padding=True,
+            return_tensors="pt"
+        ).to(device)
 
-sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_0_continue.wav"), audio_file_01, sampling_rate)
-sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_1_continue.wav"), audio_file_02, sampling_rate)
+        inputs["input_values"] = inputs["input_values"].half()
+
+        audio_values = model.generate(**inputs, do_sample=True, guidance_scale=3, max_new_tokens=max_new_tokens)
+        audio_values = processor.batch_decode(audio_values, padding_mask=inputs.padding_mask)
+        sample = audio_values[0]
+        # normalize sample
+        sample = sample / np.max(np.abs(sample))
+
+        audios.append(sample)
+
+    final_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
+    sf.write(os.path.join(base_dir, f"music_medicine_{args.current_state}-{args.target_state}.wav"), sampling_rate)
+    # # add the new audio to the original samples
+    # audio_file_01 = np.hstack((sample[: -len(sample) // 4], audio_values[0].squeeze()))
+    # audio_file_02 = np.hstack((sample[: -len(sample) // 4], audio_values[1].squeeze()))
+    #
+    # sampling_rate = model.config.audio_encoder.sampling_rate
+    #
+    # sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_0_continue.wav"), audio_file_01, sampling_rate)
+    # sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_1_continue.wav"), audio_file_02, sampling_rate)

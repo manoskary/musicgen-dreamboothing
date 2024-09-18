@@ -28,6 +28,7 @@ _deps = [
     "torchaudio",
     "soundfile",
     "torcheval",
+    "scikit-maad"
 ]
 
 _extras_dev_deps = [
