@@ -81,6 +81,12 @@ def compute_num_steps(total_time, num_states, overlap=0.25, step_time=30):
 
 
 def compute_next_prompt(previous_prompt, state):
+    """
+    given a prompt, identify instruments, mood and genre
+
+    compute the next state (mood) and then accordingly modify instruments and genre;
+
+    """
     prompt = ""
 
     return prompt
@@ -131,7 +137,7 @@ def main():
         inputs = processor(
             audio=sample_next,
             sampling_rate=sampling_rate,
-            text=,
+            text=text_prompt,
             padding=True,
             return_tensors="pt"
         ).to(device)
