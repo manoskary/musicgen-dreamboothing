@@ -1,6 +1,6 @@
 {
     "overwrite_output_dir": true,
-    "output_dir": "./jmd-musicgen-large-v8",
+    "output_dir": "./jmd-musicgen-large-v11",
 
     "dataset_name": "/share/cp/temp/musicmed/metadata_test_32k_no_voice",
     "dataset_config_name": "default",
@@ -19,12 +19,12 @@
     "fp16": true,
     "use_fast_tokenizer": true,
     "freeze_text_encoder": true,
-    "num_train_epochs": 4,
+    "num_train_epochs": 6,
     "gradient_accumulation_steps": 8,
     "gradient_checkpointing": true,
     "per_device_train_batch_size": 24,
     "max_train_samples": 10450,
-    "learning_rate": 2e-6,
+    "learning_rate": 7e-6,
     "adam_beta1": 0.9,
     "adam_beta2": 0.99,
     "weight_decay": 0.1,
@@ -43,7 +43,7 @@
     "eval_steps": 25,
     "evaluation_strategy": "steps",
     "per_device_eval_batch_size": 4,
-    "max_eval_samples": 32,
+    "max_eval_samples": 64,
     "generation_max_length": 1503,
 
     "seed": 0,
