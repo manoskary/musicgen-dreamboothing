@@ -1,3 +1,6 @@
+import random
+
+from future.backports.email.policy import default
 from peft import PeftConfig, PeftModel
 from sympy.physics.mechanics.tests.test_system import states
 from transformers import AutoModelForTextToWaveform, AutoProcessor
@@ -21,8 +24,9 @@ def parse_args():
     parser.add_argument("--file_name", type=str, default="musicgen_out_0.wav")
     parser.add_argument("--current_state", type=str, default="sad")
     parser.add_argument("--overlap", type=float, default=0.25)
+    parser.add_argument("--length", type=int, default=15, help="generation length in minutes")
     parser.add_argumnet("--target_state", type=str, default="happy")
-
+    parser.add_argument("--input_prompt", type=str, default="sad piano with ambient sounds")
 
     args = parser.parse_args()
     return args
@@ -77,22 +81,25 @@ def compute_num_steps(total_time, num_states, overlap=0.25, step_time=30):
     # Calculate the number of steps for each state
     steps_per_state = np.array([state_time / net_content_per_step for state_time in state_times])
 
+    # multiply the number of states by the steps per state
+
+
     return steps_per_state
 
 
-def compute_next_prompt(previous_prompt, state):
-    """
-    given a prompt, identify instruments, mood and genre
-
-    compute the next state (mood) and then accordingly modify instruments and genre;
-
-    """
-    prompt = ""
-
-    return prompt
-
-
-
+def get_prob_list_of_states(states, num_steps_per_state):
+    result = []
+    for i, num_steps in enumerate(num_steps_per_state):
+        if i == 0:
+            result = [states[0]]*num_steps
+        else:
+            for j in range(num_steps):
+                # roll the dice 1 out of 6
+                if random.randint(0, 6) == 1 and j > 0:
+                    result.append(states[i-1])
+                else:
+                    result.append(states[i])
+    return result
 
 def main():
     args = parse_args()
@@ -103,10 +110,50 @@ def main():
 
     model_path = args.model_path
 
+    df = pd.read_csv(os.path.join(os.path.dirname(__file__), 'jamendo_stats.csv'), header=[0, 1])
+
+    def compute_next_prompt(previous_prompt, next_state):
+        """
+        given a prompt, identify instruments, mood and genre
+
+        compute the next state (mood) and then accordingly modify instruments and genre;
+
+        """
+        words = previous_prompt.replace(",", "").split(" ")
+
+        # find emotions in text
+        cur_instruments = []
+        cur_genre = []
+        for w in words:
+            # find current instruments
+            if w in df["instrument"].columns:
+                cur_instruments.append(w)
+
+            if w in df["genre"].columns:
+                cur_genre.append(w)
+
+        # roll dice whether to change the instrumentation (1 to 6):
+        if random.randint(0, 6) == 1:
+            instrument_df = df["instrument"][df["emotion"][next_state] == True]
+            rand_index = random.randint(0, len(instrument_df))
+            row = instrument_df.iloc[rand_index]
+            cur_instruments = row[row != 0].keys().to_list()
+
+
+        # roll dice whether to change the genre (1 to 6):
+        if random.randint(0, 6) == 1:
+            genre_df = df["genre"][df["emotion"][next_state] == True]
+            rand_index = random.randint(0, len(genre_df))
+            row = genre_df.iloc[rand_index]
+            cur_genre = row[row != 0].keys().to_list()
+
+        prompt = [next_state] + cur_instruments + cur_genre
+        prompt = ", ".join(prompt)
+        return prompt
+
     config = PeftConfig.from_pretrained(model_path)
     model = AutoModelForTextToWaveform.from_pretrained(config.base_model_name_or_path, torch_dtype=torch.float16)
     model = PeftModel.from_pretrained(model, model_path).to(device)
-
     processor = AutoProcessor.from_pretrained(model_path)
     sampling_rate = 32000
     inputs = processor(
@@ -125,15 +172,17 @@ def main():
     index_stop = int(1 / args.overlap)
 
     states = globals_and_setup(args.current_state, args.target_state)
+    num_steps_per_state = compute_num_steps(args.length, len(states))
+    states_with_repeat = get_prob_list_of_states(states, num_steps_per_state)
 
     # TODO: ~7 seconds of the source or previoussly generated audio is used as prompt, we can use this 7sec overlap to
     #  crossfade the generated audio to avoid clicks, phase shifts and volume changes after normalization.
     audios = [sample]
     text_prompt = args.input_prompt
 
-    for i in range(10):
+    for i in range(len(states_with_repeat)):
         sample_next = sample[- len(sample) // index_stop : ]
-        text_prompt = compute_next_prompt(text_prompt)
+        text_prompt = compute_next_prompt(text_prompt, states_with_repeat[i])
         inputs = processor(
             audio=sample_next,
             sampling_rate=sampling_rate,
