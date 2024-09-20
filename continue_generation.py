@@ -210,9 +210,9 @@ def main():
     audios = [sample]
     text_prompt = args.input_prompt
 
-    for i in range(len(states_with_repeat)):
+    for i, state in enumerate(states_with_repeat):
         sample_next = sample[- len(sample) // index_stop : ]
-        text_prompt = compute_next_prompt(text_prompt, states_with_repeat[i])
+        text_prompt = compute_next_prompt(text_prompt, state)
         inputs = processor(
             audio=sample_next,
             sampling_rate=sampling_rate,

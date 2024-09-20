@@ -28,6 +28,7 @@ _deps = [
     "torchaudio",
     "soundfile",
     "torcheval",
+    "scipy",
     "scikit-maad"
 ]
 
