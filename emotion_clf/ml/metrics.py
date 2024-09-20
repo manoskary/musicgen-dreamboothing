@@ -5,6 +5,7 @@ import numpy as np
 import sklearn.metrics
 import torch
 from torch import Tensor
+from scipy import linalg
 import emotion_clf.ml.losses as ml_losses
 
 
@@ -52,3 +53,32 @@ def weighted_bce_loss(targets: np.ndarray, probas: np.ndarray) -> np.ndarray:
     targs = torch.Tensor(targets)
     outs = torch.logit(torch.Tensor(probas))
     return torch.mean(loss(outs, targs), 0).cpu().numpy()
+
+
+def mu_sigma_from_activations(act):
+    mu = np.mean(act, axis=0)
+    sigma = np.cov(act, rowvar=False)
+    return mu, sigma
+
+
+def ensure_tensor(x, device=None):
+    if not isinstance(x, torch.Tensor):
+        x = torch.as_tensor(x)
+    return x.pin_memory().to(device, non_blocking=True) if device else x
+
+
+def frechet_distance(
+    mu_x: torch.Tensor,
+    sigma_x: torch.Tensor,
+    mu_y: torch.Tensor,
+    sigma_y: torch.Tensor,
+    device=None,
+) -> torch.Tensor:
+    mu_x = ensure_tensor(mu_x, device)
+    sigma_x = ensure_tensor(sigma_x, device)
+    mu_y = ensure_tensor(mu_y, device)
+    sigma_y = ensure_tensor(sigma_y, device)
+    a = (mu_x - mu_y).square().sum(dim=-1)
+    b = sigma_x.trace() + sigma_y.trace()
+    c = torch.linalg.eigvals(sigma_x @ sigma_y).sqrt().real.sum(dim=-1)
+    return a + b - 2 * c
