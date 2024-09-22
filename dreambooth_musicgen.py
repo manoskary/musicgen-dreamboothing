@@ -51,7 +51,7 @@ from torcheval.metrics.audio import FrechetAudioDistance
 
 os.environ["WANDB_PROJECT"] = "Generative-Music-Medicine"
 # Set WANDB Entity to your username
-os.environ["WANDB_ENTITY"] = "vocsep"
+#os.environ["WANDB_ENTITY"] = "vocsep"
 os.environ["WANDB_RUN_GROUP"] = "Fine-Tuning"
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -554,7 +554,7 @@ def main():
 
         demucs = pretrained.get_model("htdemucs")
         if torch.cuda.device_count() > 0:
-            demucs.to("cuda:0")
+            demucs.to("cuda")
 
         audio_column_name = data_args.target_audio_column_name
 
@@ -562,7 +562,7 @@ def main():
             return {"array": audio.cpu().numpy(), "sampling_rate": sr}
 
         def filter_stems(batch, rank=None):
-            device = "cpu" if torch.cuda.device_count() == 0 else "cuda:0"
+            device = "cpu" if torch.cuda.device_count() == 0 else "cuda"
             if rank is not None:
                 # move the model to the right GPU if not there already
                 device = f"cuda:{(rank or 0)% torch.cuda.device_count()}"
