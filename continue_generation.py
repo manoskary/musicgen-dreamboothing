@@ -1,6 +1,7 @@
 import random
 from peft import PeftConfig, PeftModel
 from transformers import AutoModelForTextToWaveform, AutoProcessor
+from collections import deque
 import torch
 import soundfile as sf
 import os
@@ -144,7 +145,15 @@ def update_instrumentation(df, instruments_history, state):
     temperature = {1: 1.0, 2: 0.5, 3: 0.3}[unique_instruments]
     if random.random() < temperature:
         instrument_distribution = get_state_distribution(df, state, 'instrument')
-        next_instrumentation = sample_from_dict(instrument_distribution)
+        # avoid infinite loop of having only one instrument occurence for the emotion
+        if len(instrument_distribution) == 1:
+            next_instrumentation = next(iter(instrument_distribution))
+        else:
+            # given we want to change the instrument to another one, we need to make sure it is not the same as the previous one
+            while True:
+                next_instrumentation = sample_from_dict(instrument_distribution)
+                if next_instrumentation != instruments_history[-3]:
+                    break
     return next_instrumentation
 
 def update_genre(df, genre_history, state):
@@ -154,7 +163,15 @@ def update_genre(df, genre_history, state):
     temperature = {1: 1.0, 2: 0.5, 3: 0.3}[unique_genre]
     if random.random() < temperature:
         genre_distribution = get_state_distribution(df, state, 'genre')
-        next_genre = sample_from_dict(genre_distribution)
+        # avoid infinite loop of having only one genre occurence for the emotion
+        if len(instrument_distribution) == 1:
+            next_instrumentation = next(iter(instrument_distribution))
+        else:
+            # given we want to change the instrument to another one, we need to make sure it is not the same as the previous one
+            while True:
+                next_genre = sample_from_dict(genre_distribution)
+                if next_genre != genre_history[-3]:
+                    break
     return next_genre
 
 def main():
