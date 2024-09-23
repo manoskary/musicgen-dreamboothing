@@ -44,9 +44,11 @@ def globals_and_setup(init_state, final_state):
         "happy", "contented", "serene", "relaxed", "calm"])
     assert init_state in emotions
     assert final_state in emotions
-    init_index = emotions.index(init_state)
-    final_index = emotions.index(final_state)
-    assert init_index < final_index
+    init_index = np.where(emotions == init_state)[0][0]
+    final_index = np.where(emotions == final_state)[0][0]
+    # assert init_index < final_index
+    negative_emotion_threshold = np.where(emotions == "tense")[0][0]
+    assert final_index > negative_emotion_threshold
     return emotions[init_index, final_index]
 
 
@@ -112,6 +114,49 @@ def get_prob_list_of_states(states, num_steps_per_state):
                     result.append(states[i])
     return result
 
+def get_state_distribution(df: pd.DataFrame, state, mid_feature: str):
+    # Filter the DataFrame for the given size
+    filtered_df = df[df['emotion'] == state]
+    # Count the occurrences of each feature
+    feature_counts = filtered_df[mid_feature].value_counts()
+    # Calculate the total number of entries for the given feature
+    total_entries = feature_counts.sum()
+    # Calculate the percentage distribution
+    distribution = (feature_counts / total_entries).round(2)
+    # Convert to dictionary
+    return distribution.to_dict()
+
+# very hackey, not optimized, to be improved
+def sample_from_dict(dct):
+    rand_val = random.random()
+    total = 0
+    for k, v in dct.items():
+        total += v
+        if rand_val <= total:
+            return k
+    assert False, 'unreachable'
+
+#TODO: next two update functions are too similar, should be merged to one function
+def update_instrumentation(df, instruments_history, state):
+    instruments_queue = deque(instruments_history[-3:], maxlen=3)
+    next_instrumentation = instruments_queue[-1]
+    unique_instruments = len(set(instruments_queue))
+    temperature = {1: 1.0, 2: 0.5, 3: 0.3}[unique_instruments]
+    if random.random() < temperature:
+        instrument_distribution = get_state_distribution(df, state, 'instrument')
+        next_instrumentation = sample_from_dict(instrument_distribution)
+    return next_instrumentation
+
+def update_genre(df, genre_history, state):
+    genre_queue = deque(genre_history[-3:], maxlen=3)
+    next_genre = genre_queue[-1]
+    unique_genre = len(set(genre_queue))
+    temperature = {1: 1.0, 2: 0.5, 3: 0.3}[unique_genre]
+    if random.random() < temperature:
+        genre_distribution = get_state_distribution(df, state, 'genre')
+        next_genre = sample_from_dict(genre_distribution)
+    return next_genre
+
 def main():
     args = parse_args()
     # default output should be in folder ./artifacts/
@@ -126,7 +171,7 @@ def main():
     df = pd.read_csv(os.path.join(os.path.dirname(__file__), 'jamendo_stats.csv'), header=[0, 1])
 
     # this function needs to be here to use the df as global.
-    def compute_next_prompt(previous_prompt, next_state):
+    def compute_next_prompt(previous_prompt, next_state, instruments_history, genre_history):
         """
         given a prompt, identify instruments, mood and genre
 
@@ -147,38 +192,19 @@ def main():
             if w in df["genre"].columns:
                 cur_genre.append(w)
 
-        # roll dice whether to change the instrumentation (1 to 6)
-        # TODO: find a better way to change the instrumentation
-        if random.randint(0, 6) == 1:
-            # Get from the dataset statistics all the instrumentations that had the same emotion as the next state.
-            instrument_df = df["instrument"][df["emotion"][next_state] == True]
-            # randomly pick one
-            rand_index = random.randint(0, len(instrument_df))
-            # fetch that random row
-            row = instrument_df.iloc[rand_index]
-            # find which instruments are present
-            cur_instruments = row[row != 0].keys().to_list()
-
-
-        # roll dice whether to change the genre (1 to 6):
-        # TODO: find a better way to change the genre
-        if random.randint(0, 6) == 1:
-            # Get from the dataset statistics the genre that had the same emotion as the next state.
-            genre_df = df["genre"][df["emotion"][next_state] == True]
-            # randomly pick one
-            rand_index = random.randint(0, len(genre_df))
-            # fetch that random row
-            row = genre_df.iloc[rand_index]
-            # find which genre is present
-            cur_genre = row[row != 0].keys().to_list()
+        # we could skip the cur variables and just access directly from the lists for the prompt
+        cur_instruments = update_instrumentation(df, instruments_history, next_state)
+        cur_genre = update_genre(df, genre_history, next_state)
+        instruments_history.append(cur_instruments)
+        genre_history.append(cur_genre)
 
         # next prompt is a combination of the next state, instrumentation (random or previous) and genre separated by comma
         # e.g. sad, piano, guitar, 80s
         prompt = [next_state] + cur_instruments + cur_genre
         prompt = ", ".join(prompt)
-        return prompt
+        return prompt, instruments_history, genre_history
 
-    # set up model staff
+    # set up model finetuning and audio parameters
     config = PeftConfig.from_pretrained(model_path)
     model = AutoModelForTextToWaveform.from_pretrained(config.base_model_name_or_path, torch_dtype=torch.float16)
     model = PeftModel.from_pretrained(model, model_path).to(device)
@@ -209,10 +235,12 @@ def main():
 
     audios = [sample]
     text_prompt = args.input_prompt
+    instuments_history = []
+    genre_history = []
 
     for i, state in enumerate(states_with_repeat):
         sample_next = sample[- len(sample) // index_stop : ]
-        text_prompt = compute_next_prompt(text_prompt, state)
+        text_prompt, instuments_history, genre_history = compute_next_prompt(text_prompt, state, instruments_history, genre_history)
         inputs = processor(
             audio=sample_next,
             sampling_rate=sampling_rate,
