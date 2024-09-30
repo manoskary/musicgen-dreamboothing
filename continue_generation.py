@@ -292,16 +292,10 @@ def main():
     # Initialize the FrechetAudioDistance metric
 
     # Load audio file and sampling rate (returns a tuple with the audio tensor and the sampling rate)
-    real_audio, sr = librosa.load("/some/path/to/real_audio.wav", sr=None)
+    real_audio, sr = librosa.load("/some/path/to/real_audio.wav", sr=16000)
 
     real_audio_tensor = torch.from_numpy(real_audio).float()
     final_audio_tensor = torch.from_numpy(final_audio).float()
-
-    # Resample audio to 32000 Hz if needed
-    if real_audio_sr != 32000:
-        real_audio_tensor = torchaudio.functional.resample(real_audio_tensor, orig_freq=real_audio_sr, new_freq=32000)
-    if final_audio_sr != 32000:
-        final_audio_tensor = torchaudio.functional.resample(final_audio_tensor, orig_freq=final_audio_sr, new_freq=32000)
 
     # Define preprocessing function if needed
     def preprocess_audio(input_audio):
