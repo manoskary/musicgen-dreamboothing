@@ -9,6 +9,7 @@ import librosa
 import argparse
 import numpy as np
 import pandas as pd
+from typing import Dict
 import maad
 
 
@@ -115,17 +116,53 @@ def get_prob_list_of_states(states, num_steps_per_state):
                     result.append(states[i])
     return result
 
-def get_state_distribution(df: pd.DataFrame, state, mid_feature: str):
-    # Filter the DataFrame for the given size
-    filtered_df = [df['emotion'] == state]
-    # Count the occurrences of each feature
-    feature_counts = filtered_df[mid_feature].value_counts()
-    # Calculate the total number of entries for the given feature
-    total_entries = feature_counts.sum()
-    # Calculate the percentage distribution
-    distribution = (feature_counts / total_entries).round(2)
-    # Convert to dictionary
-    return distribution.to_dict()
+def get_instrument_distribution_for_emotion(df: pd.DataFrame, emotion: str) -> Dict[str, float]:
+    # Combine the two-level column index into a single level
+    df_copy = df.copy()
+    df_copy.columns = [f"{col[0]}_{col[1]}" if col[0] != '' else col[1] for col in df_copy.columns]
+    # Find the emotion column
+    emotion_column = f"emotion_{emotion}"
+    if emotion_column not in df_copy.columns:
+        raise ValueError(f"Emotion '{emotion}' not found in DataFrame columns")
+    # Filter rows where the specified emotion is True
+    emotion_rows = df_copy[df_copy[emotion_column] == True]
+    # Get instrument columns
+    instrument_columns = [col for col in df_copy.columns if col.startswith('instrument_')]
+    # Count True values for each instrument in the filtered rows
+    instrument_counts = emotion_rows[instrument_columns].sum()
+    # Calculate percentages
+    total_instruments = instrument_counts.sum()
+    if total_instruments == 0:
+        return {}  # Return empty dict if no instruments are found
+    distribution = (instrument_counts / total_instruments * 100).round(2)
+    # Filter out instruments with 0% and sort in descending order
+    distribution = distribution[distribution > 0].sort_values(ascending=False)
+    # Clean up the instrument names in the result
+    return {col.split('_', 1)[1]: value for col, value in distribution.to_dict().items()}
+
+def get_genre_distribution_for_emotion(df: pd.DataFrame, emotion: str) -> Dict[str, float]:
+    # Combine the two-level column index into a single level
+    df_copy = df.copy()
+    df_copy.columns = [f"{col[0]}_{col[1]}" if col[0] != '' else col[1] for col in df_copy.columns]
+    # Find the emotion column
+    emotion_column = f"emotion_{emotion}"
+    if emotion_column not in df_copy.columns:
+        raise ValueError(f"Emotion '{emotion}' not found in DataFrame columns")
+    # Filter rows where the specified emotion is True
+    emotion_rows = df_copy[df_copy[emotion_column] == True]
+    # Get genre columns
+    genre_columns = [col for col in df_copy.columns if col.startswith('genre_')]
+    # Count True values for each genre in the filtered rows
+    genre_counts = emotion_rows[genre_columns].sum()
+    # Calculate percentages
+    total_genre = genre_counts.sum()
+    if total_genre == 0:
+        return {}  # Return empty dict if no genre are found
+    distribution = (genre_counts / total_genre * 100).round(2)
+    # Filter out genre with 0% and sort in descending order
+    distribution = distribution[distribution > 0].sort_values(ascending=False)
+    # Clean up the genre names in the result
+    return {col.split('_', 1)[1]: value for col, value in distribution.to_dict().items()}
 
 # very hackey, not optimized, to be improved
 def sample_from_dict(dct):
@@ -144,7 +181,7 @@ def update_instrumentation(df, instruments_history, state):
     unique_instruments = len(set(instruments_queue))
     temperature = {1: 1.0, 2: 0.5, 3: 0.3}[unique_instruments]
     if random.random() < temperature:
-        instrument_distribution = get_state_distribution(df, state, 'instrument')
+        instrument_distribution = get_instrument_distribution_for_emotion(df, state)
         # avoid infinite loop of having only one instrument occurence for the emotion
         if len(instrument_distribution) == 1:
             next_instrumentation = next(iter(instrument_distribution))
@@ -162,12 +199,12 @@ def update_genre(df, genre_history, state):
     unique_genre = len(set(genre_queue))
     temperature = {1: 1.0, 2: 0.5, 3: 0.3}[unique_genre]
     if random.random() < temperature:
-        genre_distribution = get_state_distribution(df, state, 'genre')
+        genre_distribution = get_genre_distribution_for_emotion(df, state)
         # avoid infinite loop of having only one genre occurence for the emotion
-        if len(instrument_distribution) == 1:
-            next_instrumentation = next(iter(instrument_distribution))
+        if len(genre_distribution) == 1:
+            next_genre = next(iter(genre_distribution))
         else:
-            # given we want to change the instrument to another one, we need to make sure it is not the same as the previous one
+            # given we want to change the genre to another one, we need to make sure it is not the same as the previous one
             while True:
                 next_genre = sample_from_dict(genre_distribution)
                 if next_genre != genre_history[-3]:
@@ -217,7 +254,8 @@ def main():
 
         # next prompt is a combination of the next state, instrumentation (random or previous) and genre separated by comma
         # e.g. sad, piano, guitar, 80s
-        prompt = [next_state] + cur_instruments + cur_genre
+        import pdb; pdb.set_trace()
+        prompt = [next_state] + [cur_instruments] + [cur_genre]
         prompt = ", ".join(prompt)
         return prompt, instruments_history, genre_history
 
