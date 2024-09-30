@@ -50,7 +50,7 @@ def globals_and_setup(init_state, final_state):
     # assert init_index < final_index
     negative_emotion_threshold = np.where(emotions == "tense")[0][0]
     assert final_index > negative_emotion_threshold
-    return emotions[init_index, final_index]
+    return emotions[init_index], emotions[final_index]
 
 
 def compute_num_steps(total_time, num_states, overlap=0.25, step_time=30):
@@ -117,7 +117,7 @@ def get_prob_list_of_states(states, num_steps_per_state):
 
 def get_state_distribution(df: pd.DataFrame, state, mid_feature: str):
     # Filter the DataFrame for the given size
-    filtered_df = df[df['emotion'] == state]
+    filtered_df = [df['emotion'] == state]
     # Count the occurrences of each feature
     feature_counts = filtered_df[mid_feature].value_counts()
     # Calculate the total number of entries for the given feature
@@ -236,6 +236,7 @@ def main():
 
 
     audio_values = model.generate(**inputs, do_sample=True, guidance_scale=3, max_new_tokens=1503).squeeze()
+    audio_values = audio_values.cpu().detach().numpy()
     generation_length = 30 # seconds
     # 1503 tokes is 30 seconds of generation for MusicGen
     max_new_tokens = int(1503 * (1 - args.overlap))
@@ -246,14 +247,15 @@ def main():
 
     # Compute emotion labels for the entire generation process.
     states = globals_and_setup(args.current_state, args.target_state)
-    num_steps_per_state = compute_num_steps(args.length, len(states))
+    num_steps_per_state = compute_num_steps(args.length, len(states)).astype(int)
     states_with_repeat = get_prob_list_of_states(states, num_steps_per_state)
 
 
     audios = [sample]
     text_prompt = args.input_prompt
-    instuments_history = []
-    genre_history = []
+    # Initialize with three invalid instruments and genres for deque to work correctly
+    instruments_history = ["N/A", "N/A", "N/A"]
+    genre_history = ["N/A", "N/A", "N/A"]
 
     for i, state in enumerate(states_with_repeat):
         sample_next = sample[- len(sample) // index_stop : ]
