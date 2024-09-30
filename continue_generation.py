@@ -10,6 +10,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import maad
+from maad import util
 import pdb
 
 
@@ -260,6 +261,7 @@ def main():
     #audio_values = sample
     for i, state in enumerate(states_with_repeat):
         print('state {}/{}'.format(i, len(states_with_repeat)))
+        print('Text prompt: {}'.format(text_prompt))
         sample_next = sample[-len(sample) // index_stop:].flatten()  # (240000,)
         #sample_next = audio_values[-len(audio_values) // index_stop:].flatten()
         #text_prompt, instuments_history, genre_history = compute_next_prompt(text_prompt, state, instruments_history, genre_history)
@@ -285,7 +287,6 @@ def main():
         if i == 20:
             break
 
-    pdb.set_trace()
     # This utility applies cross fade for all audio segments.
     final_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
     sf.write(os.path.join(base_dir, f"music_medicine_{args.current_state}-{args.target_state}.wav"), final_audio, sampling_rate)
