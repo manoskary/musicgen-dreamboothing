@@ -10,7 +10,8 @@ import argparse
 import numpy as np
 import pandas as pd
 import maad
-
+from torcheval.metrics import FrechetAudioDistance
+import torchaudio
 
 def parse_args():
     """
@@ -286,6 +287,41 @@ def main():
     #
     # sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_0_continue.wav"), audio_file_01, sampling_rate)
     # sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_1_continue.wav"), audio_file_02, sampling_rate)
+
+    # Evaluate the FAD metric between the generated audio and the original audio.
+    # Initialize the FrechetAudioDistance metric
+
+    # Load audio file and sampling rate (returns a tuple with the audio tensor and the sampling rate)
+    real_audio, sr = librosa.load("/some/path/to/real_audio.wav", sr=None)
+
+    real_audio_tensor = torch.from_numpy(real_audio).float()
+    final_audio_tensor = torch.from_numpy(final_audio).float()
+
+    # Resample audio to 32000 Hz if needed
+    if real_audio_sr != 32000:
+        real_audio_tensor = torchaudio.functional.resample(real_audio_tensor, orig_freq=real_audio_sr, new_freq=32000)
+    if final_audio_sr != 32000:
+        final_audio_tensor = torchaudio.functional.resample(final_audio_tensor, orig_freq=final_audio_sr, new_freq=32000)
+
+    # Define preprocessing function if needed
+    def preprocess_audio(input_audio):
+        # Set to Mono
+        if input_audio.dim() == 2:
+            input_audio = input_audio.mean(dim=0, keepdim=True)
+        return input_audio
+
+    fad_base_model = torch.hub.load('harritaylor/torchvggish', 'vggish')
+    fad_base_model.eval()  # Set to evaluation mode
+    embedding_dim = 128
+
+    fad_metric = FrechetAudioDistance(
+        preproc=preprocess_audio,
+        model = fad_base_model,
+        embedding_dim=embedding_dim,
+        device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    )
+
+    fad_metric.update(final_audio, real_audio)
 
 
 if __name__ == "__main__":
