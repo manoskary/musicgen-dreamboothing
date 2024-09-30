@@ -299,9 +299,27 @@ def main():
 
     # Define preprocessing function if needed
     def preprocess_audio(input_audio):
+        print(f"Input audio shape: {input_audio.shape if hasattr(input_audio, 'shape') else 'scalar'}")
+        print(f"Input audio type: {type(input_audio)}")
+        
+        # Handle scalar input
+        if isinstance(input_audio, (float, int)) or (isinstance(input_audio, torch.Tensor) and input_audio.dim() == 0):
+            print("Warning: Input is a scalar. Creating a dummy waveform.") # WE ALWAYS HAVE A SCALAR INPUT VALUE HERE FOR SOME REASON
+            input_audio = torch.zeros(16000)  
+        
+        # Ensure input is a tensor
+        if not isinstance(input_audio, torch.Tensor):
+            input_audio = torch.tensor(input_audio)
+        
+        # Ensure 2D: (channels, samples)
+        if input_audio.dim() == 1:
+            input_audio = input_audio.unsqueeze(0)
+        
         # Set to Mono
-        if input_audio.dim() == 2:
+        if input_audio.dim() == 2 and input_audio.size(0) > 1:
             input_audio = input_audio.mean(dim=0, keepdim=True)
+        
+        print(f"Preprocessed audio shape: {input_audio.shape}")
         return input_audio
 
     fad_base_model = torch.hub.load('harritaylor/torchvggish', 'vggish')
