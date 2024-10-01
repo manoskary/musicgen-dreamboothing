@@ -22,13 +22,18 @@ class FADMetric:
         real_features = self.extract_features(real_waveform)
         gen_features = self.extract_features(generated_waveform)
 
+        if isinstance(real_features, torch.Tensor):
+            real_features = real_features.detach().cpu().numpy()
+        if isinstance(gen_features, torch.Tensor):
+            gen_features = gen_features.detach().cpu().numpy()
+
+
         # Calculate mean and covariance
         mu_real, sigma_real = np.mean(real_features, axis=0), np.cov(real_features, rowvar=False)
         mu_gen, sigma_gen = np.mean(gen_features, axis=0), np.cov(gen_features, rowvar=False)
 
         # Calculate FAD
         diff = mu_real - mu_gen
-        import pdb; pdb.set_trace()
         covmean = sqrtm(sigma_real.dot(sigma_gen))
         
         if np.iscomplexobj(covmean):
