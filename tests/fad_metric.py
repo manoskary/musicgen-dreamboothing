@@ -13,11 +13,11 @@ class FADMetric:
         self.model.eval()
 
     def extract_features(self, audio):
-        return self.model.forward(audio)
+        return self.model.forward(audio, fs=16000)
 
     def calculate_fad(self, real_audio, generated_audio):
-        real_waveform = librosa.load(real_audio, sr=16000, mono=True)
-        generated_audio = librosa.load(generated_audio, sr=16000, mono=True)
+        real_waveform, real_sr = librosa.load(real_audio, sr=16000, mono=True)
+        generated_waveform, generated_sr = librosa.load(generated_audio, sr=16000, mono=True)
 
         real_features = self.extract_features(real_waveform)
         gen_features = self.extract_features(generated_waveform)
