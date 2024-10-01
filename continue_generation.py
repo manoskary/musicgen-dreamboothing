@@ -10,7 +10,21 @@ import argparse
 import numpy as np
 import pandas as pd
 from typing import Dict
+from scipy.signal import butter, filtfilt
 import maad
+
+
+def butter_highpass(cutoff, fs, order=5):
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    return b, a
+
+
+def highpass_filter(data, cutoff, fs, order=5):
+    b, a = butter_highpass(cutoff, fs, order=order)
+    y = filtfilt(b, a, data)
+    return y
 
 
 def parse_args():
@@ -316,8 +330,19 @@ def main():
         audios.append(sample)
 
     # This utility applies cross fade for all audio segments.
-    final_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
-    sf.write(os.path.join(base_dir, f"music_medicine_{args.current_state}-{args.target_state}.wav"), final_audio, sampling_rate)
+    joined_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
+
+    # Set the cutoff frequency
+    cutoff = 60  # Hz
+
+    # Apply the high-pass filter
+    filtered_data = librosa.effects.highpass_filter(joined_audio, sampling_rate, cutoff=cutoff)
+
+    # Potential noise reduction
+    # import noisereduce as nr
+    # denoised_data = nr.reduce_noise(y=filtered_data, sr=sampling_rate)
+
+    sf.write(os.path.join(base_dir, f"music_medicine_{args.current_state}-{args.target_state}.wav"), filtered_data, sampling_rate)
     # # add the new audio to the original samples
     # audio_file_01 = np.hstack((sample[: -len(sample) // 4], audio_values[0].squeeze()))
     # audio_file_02 = np.hstack((sample[: -len(sample) // 4], audio_values[1].squeeze()))
