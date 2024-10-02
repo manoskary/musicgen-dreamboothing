@@ -63,7 +63,12 @@ logger = logging.getLogger(__name__)
 
 df = pd.read_csv(os.path.join(os.path.dirname(__file__), "average_mood.csv"))
 
-EMOTION_MAP = dict(zip(df["emotion"].unique(), np.arange(14)))
+EMOTIONS = np.array([
+        "bored", "depressed", "sad", "upset", "stressed",
+        "tense", "alert", "excited", "elated",
+        "happy", "contented", "serene", "relaxed", "calm"])
+
+EMOTION_MAP = dict(zip(EMOTIONS, np.arange(14)))
 
 def list_field(default=None, metadata=None):
     return field(default_factory=lambda: default, metadata=metadata)
@@ -1003,10 +1008,10 @@ def main():
 
         probs = preds.sigmoid()
 
-        exact_acc = multilabel_accuracy(probs, labels, criteria='exact_match', threshold=0.5)
-        ham_acc = multilabel_accuracy(probs, labels, criteria='hamming')
-        overlap_acc = multilabel_accuracy(probs, labels, criteria='overlap')
-        contain_acc = multilabel_accuracy(probs, labels, criteria='contain')
+        exact_acc = multilabel_accuracy(probs, labels, criteria='exact_match', threshold=0.3)
+        ham_acc = multilabel_accuracy(probs, labels, criteria='hamming', threshold=0.3)
+        overlap_acc = multilabel_accuracy(probs, labels, criteria='overlap', threshold=0.3)
+        contain_acc = multilabel_accuracy(probs, labels, criteria='contain', threshold=0.3)
 
         result = {"mer_exact_acc": exact_acc, "mer_ham_acc": ham_acc, "mer_auprc": auprc, "mer_overlap_acc": overlap_acc, "mer_contain_acc": contain_acc}
 
@@ -1019,7 +1024,17 @@ def main():
         # clip to 1
         emotions_labels = (emotions_labels >= 1).long()
         emotion_auprc = multilabel_auprc(emotions_probs, emotions_labels, average="macro", num_labels=14)
-        emotion_contain = multilabel_accuracy(emotions_probs, emotions_labels, criteria='contain')
+        emotion_contain = multilabel_accuracy(emotions_probs, emotions_labels, criteria='contain', threshold=0.3)
+
+        # Start soft evaluation
+        # shift emotions_labels to the right
+        emotions_labels = torch.roll(emotions_labels, 1, 1)
+        emotion_contain_right = multilabel_accuracy(emotions_probs, emotions_labels, criteria='contain', threshold=0.3) / 4
+        # shigt emotions_labels to the left
+        emotions_labels = torch.roll(emotions_labels, -2, 1)
+        emotion_contain_left = multilabel_accuracy(emotions_probs, emotions_labels, criteria='contain', threshold=0.3) / 4
+        # average the three contain accuracies left and right should have half the weight of the center
+        emotion_contain = emotion_contain + emotion_contain_right + emotion_contain_left
 
         result["mer_emotion_acc"] = emotion_auprc
         result["mer_emotion_auprc"] = emotion_contain
