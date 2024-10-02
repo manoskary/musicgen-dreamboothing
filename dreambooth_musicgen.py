@@ -22,6 +22,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union
 from emotion_clf.MER import MER
+import emotion_clf.ml.metrics as metrics
 import datasets
 import numpy as np
 import torch
@@ -1042,17 +1043,38 @@ def main():
 
     eval_metrics = {"clap": clap_similarity}
 
+    def calculate_fad(real_audio, generated_audio, texts):
+        '''Takes as input batch of real and generated audios, gets FAD distance between them'''
+        real_clap_inputs = clap_processor(
+            text=texts, audios=real_audio.squeeze(1), padding=True, return_tensors="pt"
+        )
+        generated_clap_inputs = clap_processor(
+            text=texts, audios=generated_audio.squeeze(1), padding=True, return_tensors="pt"
+        )
+        real_features = clap.get_audio_features(real_clap_inputs["input_features"])
+        generated_features = clap.get_audio_features(generated_clap_inputs["input_features"])
+        fad_scores = []
+        for real, generated in zip(real_features, generated_features):
+            fad_metric = metrics.frechet_audio_distance(real, generated)
+            fad_scores.append(fad_metric)
+        average_fad = np.round(np.mean(fad_scores),2)
+        return average_fad
+
+
     def compute_metrics(pred):
         input_ids = pred.inputs
         input_ids[input_ids == -100] = processor.tokenizer.pad_token_id
         texts = processor.tokenizer.batch_decode(input_ids, skip_special_tokens=True)
         audios = pred.predictions
 
+        # pred.labels is meant to be GT, to be checked
+        # fad_distance = calculate_fad(pred.labels, audios, texts)
+
         results = {key: metric(texts, audios) for (key, metric) in eval_metrics.items()}
 
         for k, v in mer_eval(texts, audios).items():
             results[k] = v
-
+        #results["fad"] = fad_distance
         return results
 
     # Now save everything to be able to create a single processor later
