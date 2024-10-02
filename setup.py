@@ -29,7 +29,8 @@ _deps = [
     "soundfile",
     "torcheval",
     "scipy",
-    "scikit-maad"
+    "scikit-maad",
+    "noisereduce"
 ]
 
 _extras_dev_deps = [

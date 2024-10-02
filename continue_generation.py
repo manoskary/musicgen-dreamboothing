@@ -12,6 +12,7 @@ import pandas as pd
 from typing import Dict
 from scipy.signal import butter, filtfilt
 import maad
+import noisereduce as nr
 
 
 def butter_highpass(cutoff, fs, order=5):
@@ -332,15 +333,14 @@ def main():
     # This utility applies cross fade for all audio segments.
     joined_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
 
-    # Set the cutoff frequency
-    cutoff = 60  # Hz
-
     # Apply the high-pass filter
-    filtered_data = librosa.effects.highpass_filter(joined_audio, sampling_rate, cutoff=cutoff)
+    # highpass filter with librosa with cutoff frequency 60 Hz
+    cutoff = 60
+    preemphasis_coefficient = 1 - np.exp(-2 * np.pi * cutoff / sampling_rate)
+    filtered_data = librosa.effects.preemphasis(joined_audio, coef=preemphasis_coefficient)
 
     # Potential noise reduction
-    # import noisereduce as nr
-    # denoised_data = nr.reduce_noise(y=filtered_data, sr=sampling_rate)
+    reduced_noise = nr.reduce_noise(y=filtered_data, sr=sampling_rate, n_fft=2048, win_length=2048, hop_length=512, prop_decrease=0.4)
 
     sf.write(os.path.join(base_dir, f"music_medicine_{args.current_state}-{args.target_state}.wav"), filtered_data, sampling_rate)
     # # add the new audio to the original samples
