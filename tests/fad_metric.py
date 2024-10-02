@@ -6,20 +6,43 @@ import numpy
 import torch
 import torchaudio
 import os
+import laion_clap
 
 class FADMetric:
     def __init__(self):
-        # Load VGGish model
-        self.model = torch.hub.load('harritaylor/torchvggish', 'vggish')
+        # Load CLAP model
+        self.model = laion_clap.CLAP_Module(enable_fusion=False)
+        self.model.load_ckpt() # download the default pretrained checkpoint.
         self.model.eval()
 
-    def extract_features(self, audio):
-        return self.model.forward(audio, fs=16000)
+    def extract_features(self, audio, sr=48000, window_size=1.0, hop_size=0.5):
+        # Convert window and hop sizes from seconds to samples
+        window_samples = int(window_size * sr)
+        hop_samples = int(hop_size * sr)
+
+        # Pad audio if it's shorter than the window size
+        if len(audio) < window_samples:
+            audio = np.pad(audio, (0, window_samples - len(audio)))
+
+        # Extract features using sliding window
+        features = []
+        for start in range(0, len(audio) - window_samples + 1, hop_samples):
+            window = audio[start:start + window_samples]
+            window_tensor = torch.from_numpy(window).float().unsqueeze(0)
+            if torch.cuda.is_available():
+                window_tensor = window_tensor.cuda()
+            with torch.no_grad():
+                feature = self.model.get_audio_embedding_from_data(window_tensor, sr)
+            features.append(feature.squeeze().cpu().numpy())
+        features = (features - np.mean(features)) / np.std(features)
+
+        return np.array(features)
+
+
 
     def calculate_fad(self, real_audio, generated_audio):
-        real_waveform, real_sr = librosa.load(real_audio, sr=16000, mono=True)
-        generated_waveform, generated_sr = librosa.load(generated_audio, sr=16000, mono=True)
-        generated_waveform=numpy.random.normal(2*real_waveform+2,20)
+        real_waveform, real_sr = librosa.load(real_audio, sr=48000, mono=True) #16kHz for vggish, #48kHz for CLAP
+        generated_waveform, generated_sr = librosa.load(generated_audio, sr=48000, mono=True)
 
         len1, len2 = len(generated_waveform), len(real_waveform)
         min_len = min(len1, len2)

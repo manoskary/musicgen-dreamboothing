@@ -36,12 +36,12 @@ def main():
     fad_calculator = FADMetric()
     
     # Takes two input genres (or instruments or moods or any sort of dataset) and compares the FAD scores between all songs within each genre and between the two genres
-    genre1 = ""
-    genre2 = ""
+    genre1 = "disco"
+    genre2 = "jazz"
 
     # Define directories
-    genre1_dir = ""
-    genre2_dir = ""
+    genre1_dir = "/Users/enikolak/Desktop/personal/musictherapy/our_implementation/musicgen-dreamboothing/tests/Data/genres_original/" + genre1 + "_short"
+    genre2_dir = "/Users/enikolak/Desktop/personal/musictherapy/our_implementation/musicgen-dreamboothing/tests/Data/genres_original/" + genre2 + "_short"
     
     # Calculate FAD scores for genre1 songs
     print(f"Calculating FAD scores for {genre1} songs:")
