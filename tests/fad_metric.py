@@ -4,9 +4,6 @@ from scipy.linalg import sqrtm
 import librosa
 import numpy
 import torch
-import torchaudio
-import os
-import laion_clap
 
 class FADMetric:
     def __init__(self):
@@ -14,6 +11,8 @@ class FADMetric:
         self.model = laion_clap.CLAP_Module(enable_fusion=False)
         self.model.load_ckpt() # download the default pretrained checkpoint.
         self.model.eval()
+        if torch.cuda.is_available():
+            self.model = self.model.cuda()
 
     def extract_features(self, audio, sr=48000, window_size=1.0, hop_size=0.5):
         # Convert window and hop sizes from seconds to samples
@@ -28,6 +27,7 @@ class FADMetric:
         features = []
         for start in range(0, len(audio) - window_samples + 1, hop_samples):
             window = audio[start:start + window_samples]
+            window = (window - window.mean()) / window.std()
             window_tensor = torch.from_numpy(window).float().unsqueeze(0)
             if torch.cuda.is_available():
                 window_tensor = window_tensor.cuda()
@@ -56,6 +56,9 @@ class FADMetric:
             real_features = real_features.detach().cpu().numpy()
         if isinstance(gen_features, torch.Tensor):
             gen_features = gen_features.detach().cpu().numpy()
+
+        real_features = (real_features-numpy.min(real_features))/(numpy.max(real_features)-numpy.min(real_features))
+        gen_features = (gen_features-numpy.min(gen_features))/(numpy.max(gen_features)-numpy.min(gen_features))
 
 
         # Calculate mean and covariance
