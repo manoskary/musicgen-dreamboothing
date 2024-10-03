@@ -54,31 +54,23 @@ def weighted_bce_loss(targets: np.ndarray, probas: np.ndarray) -> np.ndarray:
     outs = torch.logit(torch.Tensor(probas))
     return torch.mean(loss(outs, targs), 0).cpu().numpy()
 
+def frechet_audio_distance(real_features, gen_features):
 
-def mu_sigma_from_activations(act):
-    mu = np.mean(act, axis=0)
-    sigma = np.cov(act, rowvar=False)
-    return mu, sigma
+    if isinstance(real_features, torch.Tensor):
+        real_features = real_features.detach().cpu().numpy()
+    if isinstance(gen_features, torch.Tensor):
+        gen_features = gen_features.detach().cpu().numpy()
 
+    # Calculate mean and covariance
+    mu_real, sigma_real = np.mean(real_features, axis=0), np.cov(real_features, rowvar=False)
+    mu_gen, sigma_gen = np.mean(gen_features, axis=0), np.cov(gen_features, rowvar=False)
+    # Calculate FAD
+    diff = mu_real - mu_gen
+    covmean = sqrtm(sigma_real.dot(sigma_gen))
+    
+    if np.iscomplexobj(covmean):
+        covmean = covmean.real
 
-def ensure_tensor(x, device=None):
-    if not isinstance(x, torch.Tensor):
-        x = torch.as_tensor(x)
-    return x.pin_memory().to(device, non_blocking=True) if device else x
+    fad = diff.dot(diff) + np.trace(sigma_real + sigma_gen - 2*covmean)
 
-
-def frechet_distance(
-    mu_x: torch.Tensor,
-    sigma_x: torch.Tensor,
-    mu_y: torch.Tensor,
-    sigma_y: torch.Tensor,
-    device=None,
-) -> torch.Tensor:
-    mu_x = ensure_tensor(mu_x, device)
-    sigma_x = ensure_tensor(sigma_x, device)
-    mu_y = ensure_tensor(mu_y, device)
-    sigma_y = ensure_tensor(sigma_y, device)
-    a = (mu_x - mu_y).square().sum(dim=-1)
-    b = sigma_x.trace() + sigma_y.trace()
-    c = torch.linalg.eigvals(sigma_x @ sigma_y).sqrt().real.sum(dim=-1)
-    return a + b - 2 * c
+    return fad
