@@ -13,6 +13,8 @@ import maad
 from maad import util
 from typing import Dict
 import pdb
+import time
+import noisereduce as nr
 
 
 def parse_args():
@@ -43,17 +45,16 @@ def globals_and_setup(init_state, final_state):
 
     """
     emotions = np.array(["bored", "depressed", "sad", "upset", "stressed",
-                #"nervous", 
-                "tense", "alert", "excited", "elated",
-                "happy", "contented", "serene", "relaxed", "calm"])
-    assert init_state in emotions
-    assert final_state in emotions
+                        "tense", "alert", "excited", "elated",
+                        "happy", "contented", "serene", "relaxed", "calm"])
+    assert init_state in emotions  # sad
+    assert final_state in emotions # happy
     init_index = np.where(emotions == init_state)[0][0]
     final_index = np.where(emotions == final_state)[0][0]
     # assert init_index < final_index
     negative_emotion_threshold = np.where(emotions == "tense")[0][0]
     assert final_index > negative_emotion_threshold
-    return emotions[init_index:final_index]  ##
+    return emotions[init_index:final_index+1]  ##
 
 
 def compute_num_steps(total_time, num_states, overlap=0.25, step_time=30):
@@ -133,15 +134,7 @@ def get_instrument_distribution_for_emotion(df: pd.DataFrame, emotion: str) -> D
     instrument_columns = [col for col in df_copy.columns if col.startswith('instrument_')]
     # Count True values for each instrument in the filtered rows
     instrument_counts = emotion_rows[instrument_columns].sum()
-    # Calculate percentages
-    #total_instruments = instrument_counts.sum()
-    #if total_instruments == 0:
-    #    return {}  # Return empty dict if no instruments are found
-    #distribution = (instrument_counts / total_instruments * 100).round(2)
-    ## Filter out instruments with 0% and sort in descending order
-    #distribution = distribution[distribution > 0].sort_values(ascending=False)
-    ## Clean up the instrument names in the result
-    #return {col.split('_', 1)[1]: value for col, value in distribution.to_dict().items()}
+    
     curated_list = []
     for label, frequency in instrument_counts.items():
         # Extract the instrument name by splitting on the underscore
@@ -165,15 +158,7 @@ def get_genre_distribution_for_emotion(df: pd.DataFrame, emotion: str) -> Dict[s
     genre_columns = [col for col in df_copy.columns if col.startswith('genre_')]
     # Count True values for each genre in the filtered rows
     genre_counts = emotion_rows[genre_columns].sum()
-    # Calculate percentages
-    #total_genre = genre_counts.sum()
-    #if total_genre == 0:
-    #    return {}  # Return empty dict if no genre are found
-    #distribution = (genre_counts / total_genre * 100).round(2)
-    ## Filter out genre with 0% and sort in descending order
-    #distribution = distribution[distribution > 0].sort_values(ascending=False)
-    ## Clean up the genre names in the result
-    #return {col.split('_', 1)[1]: value for col, value in distribution.to_dict().items()}
+    
     curated_list = []
     for label, frequency in genre_counts.items():
         # Extract the instrument name by splitting on the underscore
@@ -183,15 +168,6 @@ def get_genre_distribution_for_emotion(df: pd.DataFrame, emotion: str) -> Dict[s
         curated_list.extend([genre_name] * frequency)
     return curated_list
 
-# very hackey, not optimized, to be improved
-def sample_from_dict(dct):
-    rand_val = random.random()
-    total = 0
-    for k, v in dct.items():
-        total += v
-        if rand_val <= total:
-            return k
-    assert False, 'unreachable'
 
 #TODO: next two update functions are too similar, should be merged to one function
 def update_instrumentation(df, instruments_history, state):
@@ -208,7 +184,7 @@ def update_instrumentation(df, instruments_history, state):
             # given we want to change the instrument to another one, we need to make sure it is not the same as the previous one
             get_next = True
             while get_next:
-                next_instrumentation = random.choice(instrument_distribution) #sample_from_dict(instrument_distribution)
+                next_instrumentation = random.choice(instrument_distribution)
                 print(next_instrumentation)
                 if next_instrumentation != instruments_history[-3]:
                     get_next = False
@@ -228,12 +204,13 @@ def update_genre(df, genre_history, state):
             # given we want to change the genre to another one, we need to make sure it is not the same as the previous one
             get_next = True
             while get_next:
-                next_genre = random.choice(genre_distribution) #sample_from_dict(genre_distribution)
+                next_genre = random.choice(genre_distribution)
                 if next_genre != genre_history[-3]:
                     get_next = False
     return next_genre
 
 def main():
+    start_time = time.time()
     args = parse_args()
     # default output should be in folder ./artifacts/
     base_dir = os.path.join(os.path.dirname(__file__), args.output_dir)
@@ -267,14 +244,10 @@ def main():
             # find current genre
             if w in df["genre"].columns:
                 cur_genre.append(w)
-        ## cur_instruments = ['piano'], cur_genre= ['ambient']
+
         # we could skip the cur variables and just access directly from the lists for the prompt
-        #if i == 3:
-        #    pdb.set_trace()
         cur_instruments = update_instrumentation(df, instruments_history, next_state)
-        print('intrument updated')
         cur_genre = update_genre(df, genre_history, next_state)
-        print('genre updated')
         instruments_history.append(cur_instruments)
         genre_history.append(cur_genre)
 
@@ -317,6 +290,7 @@ def main():
 
     audios = [sample]
     text_prompt = args.input_prompt
+    prompt_history = []
 
     # Initialize with three invalid instruments and genres for deque to work correctly
     instruments_history = ["N/A", "N/A", "N/A"]
@@ -326,8 +300,9 @@ def main():
     for i, state in enumerate(states_with_repeat):
         print('state {}/{}'.format(i, len(states_with_repeat)))
         print('Text prompt: {}'.format(text_prompt))
+        prompt_history.append(text_prompt)
         sample_next = sample[-len(sample) // index_stop:].flatten()  # (240000,)
-        text_prompt, instuments_history, genre_history = compute_next_prompt(text_prompt, state, instruments_history, genre_history)
+        text_prompt, instruments_history, genre_history = compute_next_prompt(text_prompt, state, instruments_history, genre_history)
         inputs = processor(
             audio=sample_next,
             sampling_rate=sampling_rate,
@@ -342,24 +317,29 @@ def main():
         sample = audio_values[0]
         # normalize sample
         sample = sample / np.max(np.abs(sample))
-        #sf.write('./artifacts/test-{}.wav'.format(i), sample, sampling_rate)
         audios.append(sample)
 
-        #if i == 20:
-        #    break
+    # This utility applies cross fade for all audio segments.
+    joined_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
+
+    # Apply the high-pass filter
+    # highpass filter with librosa with cutoff frequency 60 Hz
+    cutoff = 60
+    preemphasis_coefficient = 1 - np.exp(-2 * np.pi * cutoff / sampling_rate)
+    filtered_data = librosa.effects.preemphasis(joined_audio, coef=preemphasis_coefficient)
+
+    # Potential noise reduction
+    reduced_noise = nr.reduce_noise(y=filtered_data, sr=sampling_rate, n_fft=2048, win_length=2048, hop_length=512, prop_decrease=0.4)
 
     # This utility applies cross fade for all audio segments.
-    final_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
-    sf.write(os.path.join(base_dir, f"music_medicine_{args.current_state}-{args.target_state}-5.wav"), final_audio, sampling_rate)
-    # # add the new audio to the original samples
-    # audio_file_01 = np.hstack((sample[: -len(sample) // 4], audio_values[0].squeeze()))
-    # audio_file_02 = np.hstack((sample[: -len(sample) // 4], audio_values[1].squeeze()))
-    #
-    # sampling_rate = model.config.audio_encoder.sampling_rate
-    #
-    # sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_0_continue.wav"), audio_file_01, sampling_rate)
-    # sf.write(os.path.join(base_dir, os.path.splitext(fn)[0] + "_1_continue.wav"), audio_file_02, sampling_rate)
+    #final_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
+    sf.write(os.path.join(base_dir, f"music_medicine_{args.current_state}-{args.target_state}.wav"), reduced_noise, sampling_rate)
 
+
+    print('Total time to iterate over {} states: {}'.format(i, time.time()-start_time))  ## in seconds
+    with open("{}-prompts.txt".format(model_path), "w") as txt_file:
+        for line in prompt_history:
+            txt_file.write(line + "\n")
 
 if __name__ == "__main__":
     main()
