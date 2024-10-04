@@ -320,9 +320,6 @@ def main():
         sample, _ = librosa.effects.trim(sample / np.max(np.abs(sample)))
         audios.append(sample)
 
-        if i == 5:
-            break
-
     # This utility applies cross fade for all audio segments.
     joined_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
 
