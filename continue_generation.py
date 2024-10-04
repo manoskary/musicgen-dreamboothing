@@ -24,7 +24,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--device", type=int, default=0)
+    parser.add_argument("--device", type=int, default=2)
     parser.add_argument("--model_path", type=str, default="jmd-musicgen-med-v5")
     parser.add_argument("--output_dir", type=str, default="artifacts")
     parser.add_argument("--guidance_scale", type=int, default=3)
@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument("--overlap", type=float, default=0.25)
     parser.add_argument("--length", type=int, default=15, help="generation length in minutes")
     parser.add_argument("--target_state", type=str, default="happy")
-    parser.add_argument("--input_prompt", type=str, default="sad piano with ambient sounds")
+    parser.add_argument("--input_prompt", type=str, default="Stressed pizzicato strings and high-pitch clarinet sounds")
 
     args = parser.parse_args()
     return args
@@ -106,6 +106,7 @@ def get_prob_list_of_states(states, num_steps_per_state):
 
     """
     result = []
+    last_state = states[-1]
     for i, num_steps in enumerate(num_steps_per_state):
         num_steps = round(num_steps)
         if i == 0:
@@ -114,7 +115,7 @@ def get_prob_list_of_states(states, num_steps_per_state):
             for j in range(num_steps):
                 # possibility to regress to previous state by rolling the dice 1 out of 6
                 # TODO: potentially something more sofisticated for the zig zag regression motion
-                if random.randint(0, 6) == 1 and j > 0:
+                if random.randint(0, 6) == 1 and j > 0 and states[i] != last_state:
                     result.append(states[i-1])
                 else:
                     result.append(states[i])
@@ -316,8 +317,11 @@ def main():
         audio_values = processor.batch_decode(audio_values, padding_mask=inputs.padding_mask)[0]  ## (1,959360)
         sample = audio_values[0]
         # normalize sample
-        sample = sample / np.max(np.abs(sample))
+        sample, _ = librosa.effects.trim(sample / np.max(np.abs(sample)))
         audios.append(sample)
+
+        if i == 5:
+            break
 
     # This utility applies cross fade for all audio segments.
     joined_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
@@ -332,12 +336,11 @@ def main():
     reduced_noise = nr.reduce_noise(y=filtered_data, sr=sampling_rate, n_fft=2048, win_length=2048, hop_length=512, prop_decrease=0.4)
 
     # This utility applies cross fade for all audio segments.
-    #final_audio = maad.util.crossfade_list(audios, fs=sampling_rate, fade_len=generation_length*args.overlap)
-    sf.write(os.path.join(base_dir, f"music_medicine_{args.current_state}-{args.target_state}.wav"), reduced_noise, sampling_rate)
+    sf.write(os.path.join(base_dir, f"music_medicine_{args.current_state}-{args.target_state}-7.wav"), reduced_noise, sampling_rate)
 
 
     print('Total time to iterate over {} states: {}'.format(i, time.time()-start_time))  ## in seconds
-    with open("{}-prompts.txt".format(model_path), "w") as txt_file:
+    with open("{}-prompts2.txt".format(model_path), "w") as txt_file:
         for line in prompt_history:
             txt_file.write(line + "\n")
 
